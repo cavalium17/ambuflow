@@ -1,12 +1,12 @@
 {
-  "name": "AmbuFlow v1.1.6",
+  "name": "AmbuFlow Pro",
   "short_name": "AmbuFlow",
   "description": "Application de gestion pour ambulanciers",
   "start_url": "/",
   "id": "/index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#001B3D",
+  "theme_color": "#001B3D",
   "lang": "fr",
   "scope": "/",
   "icons": [
@@ -23,9 +23,10 @@
       "purpose": "maskable"
     },
     {
-      "src": "/splash-v2.png",
+      "src": "pwa-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
