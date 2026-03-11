@@ -381,11 +381,14 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                   className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${cpCalculationMode === '30' ? 'bg-emerald-500 text-white' : 'text-slate-500'}`}
                 >30j</button>
               </div>
-            </div>
-            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-center">
-              {cpCalculationMode === '25' ? '2.08j / mois (Ouvrés)' : '2.5j / mois (Ouvrables)'}
-            </p>
-          </div>
+            <div className="mt-2 space-y-1 text-center">
+  <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
+    {cpCalculationMode === '25' ? 'Cumul : 2.08j / mois (Ouvrés)' : 'Cumul : 2.50j / mois (Ouvrables)'}
+  </p>
+  <p className="text-[8px] font-bold text-slate-500 uppercase">
+    Valeur d'un jour : {(parseFloat(hoursBase) / (cpCalculationMode === '25' ? 5 : 6)).toFixed(2)}h
+  </p>
+</div>
           
           <div className="grid grid-cols-1">
             <div className="flex flex-col gap-2 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
