@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getStorage } from "firebase/storage";
-import { getMessaging, Messaging } from "firebase/messaging";
+import { getMessaging, Messaging, getToken, onMessage } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -12,13 +12,16 @@ const firebaseConfig = {
   measurementId: "G-CLQE06YVBK"
 };
 
+// Clé VAPID (Web Push)
+export const VAPID_KEY = "BCtoGbVvlqhGFK4QDOD1OtQMdydaMrKK_EKDp1-zBvEv9Yc46yTBCJrj1Z3YmFk1MtvfxoMqv5MCHyi4xpZOzsw";
+
 // 1. Initialiser Firebase
 const app = initializeApp(firebaseConfig);
 
-// 2. Initialiser et EXPORTER le Storage (C'est ce qui bloquait Vercel !)
+// 2. Export Storage
 export const storage = getStorage(app);
 
-// 3. Initialiser la messagerie de façon sécurisée
+// 3. Configuration Messagerie
 let messaging: Messaging | null = null;
 try {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
@@ -27,6 +30,24 @@ try {
 } catch (err) {
   console.error("FCM non supporté:", err);
 }
-
 export { messaging };
+
+// 4. La fonction qui manquait (requestForToken)
+export const requestForToken = async () => {
+  if (!messaging) return null;
+  try {
+    const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+    return currentToken;
+  } catch (err) {
+    console.error('Erreur Token:', err);
+    return null;
+  }
+};
+
+// 5. Listener de messages
+export const onMessageListener = (callback: (payload: any) => void) => {
+  if (!messaging) return () => {};
+  return onMessage(messaging, (payload) => callback(payload));
+};
+
 export default app;
