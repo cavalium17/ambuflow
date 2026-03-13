@@ -1,3 +1,4 @@
+
 import React, { useRef, useState } from 'react';
 import { 
   User, 
@@ -29,7 +30,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Shift, ActivityLog, UserStats } from '../types';
-import { storage } from '../firebaseConfig'; // Modification du chemin ici
+import { storage } from '../src/firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface ProfileTabProps {
@@ -136,15 +137,18 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 
     setIsUploading(true);
     try {
+      // Create a unique filename based on user name and timestamp
       const filename = `profile_images/${userName.replace(/\s+/g, '_')}_${Date.now()}`;
       const storageRef = ref(storage, filename);
+      
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
+      
       setProfileImage(downloadURL);
       localStorage.setItem('ambuflow_profile_image', downloadURL);
     } catch (error) {
       console.error("Error uploading image:", error);
-      alert("Erreur lors de l'envoi de l'image.");
+      alert("Erreur lors de l'envoi de l'image. Veuillez réessayer.");
     } finally {
       setIsUploading(false);
     }
@@ -172,6 +176,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   const complianceItems = React.useMemo(() => {
     const now = new Date();
     const items = [];
+
     const getStatus = (expiryDate: Date | null) => {
       if (!expiryDate) return 'expired';
       const diffMs = expiryDate.getTime() - now.getTime();
@@ -181,6 +186,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       return 'ok';
     };
 
+    // AFGSU (4 ans)
     if (afgsuDate) {
       const expiry = new Date(afgsuDate);
       expiry.setFullYear(expiry.getFullYear() + 4);
@@ -189,6 +195,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       items.push({ label: 'AFGSU 2', status: 'expired', date: null });
     }
 
+    // Médical (5 ans à partir de la visite)
     if (medicalExpiryDate) {
       const expiry = new Date(medicalExpiryDate);
       expiry.setFullYear(expiry.getFullYear() + 5);
@@ -197,7 +204,9 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       items.push({ label: 'Aptitude Médicale', status: 'expired', date: null });
     }
 
+    // Taxi
     if (hasTaxiCard) {
+      // FPC (5 ans)
       if (taxiFpcDate) {
         const expiry = new Date(taxiFpcDate);
         expiry.setFullYear(expiry.getFullYear() + 5);
@@ -205,6 +214,8 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       } else {
         items.push({ label: 'FPC Taxi', status: 'expired', date: null });
       }
+
+      // Carte Pro (Date d'expiration directe)
       if (taxiCardExpiryDate) {
         const expiry = new Date(taxiCardExpiryDate);
         items.push({ label: 'Carte Pro Taxi', status: getStatus(expiry), date: expiry });
@@ -212,7 +223,10 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
         items.push({ label: 'Carte Pro Taxi', status: 'expired', date: null });
       }
     }
+
+    // Permis / DEA (Simple check if exists)
     items.push({ label: 'Diplôme d\'État', status: (hasDea || hasAux) ? 'ok' : 'expired', date: null });
+
     return items;
   }, [afgsuDate, medicalExpiryDate, hasDea, hasAux, hasTaxiCard, taxiFpcDate, taxiCardExpiryDate]);
 
@@ -239,7 +253,13 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               <Camera size={18} />
             </div>
           </div>
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            accept="image/*" 
+            className="hidden" 
+          />
         </div>
         <h2 className="text-3xl font-black tracking-tighter mb-1">{userName || "Ambulancier"}</h2>
         <div className="flex items-center gap-2 mb-4 flex-wrap justify-center">
@@ -257,38 +277,50 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       <div className={`${bentoCardBase} p-8`}>
         <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2"><ShieldCheck size={16} /> Checklist Conformité</h3>
         <div className="space-y-3">
-          {complianceItems.map((item, idx) => (
-            <div key={idx} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-              item.status === 'ok' ? 'bg-emerald-500/5 border-emerald-500/10' : 
-              item.status === 'warning' ? 'bg-amber-500/5 border-amber-500/10' : 
-              'bg-rose-500/5 border-rose-500/10'
-            }`}>
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-xl ${
-                  item.status === 'ok' ? 'bg-emerald-500 text-white' : 
-                  item.status === 'warning' ? 'bg-amber-500 text-white' : 
-                  'bg-rose-500 text-white'
-                }`}>
-                  {item.status === 'ok' ? <Award size={16} /> : <ShieldAlert size={16} />}
+          {complianceItems.map((item, idx) => {
+            const isOk = item.status === 'ok';
+            const isWarning = item.status === 'warning';
+            const isExpired = item.status === 'expired';
+            
+            return (
+              <div key={idx} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                isOk ? 'bg-emerald-500/5 border-emerald-500/10' : 
+                isWarning ? 'bg-amber-500/5 border-amber-500/10' : 
+                'bg-rose-500/5 border-rose-500/10'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl ${
+                    isOk ? 'bg-emerald-500 text-white' : 
+                    isWarning ? 'bg-amber-500 text-white' : 
+                    'bg-rose-500 text-white'
+                  }`}>
+                    {isOk ? <Award size={16} /> : <ShieldAlert size={16} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className={`text-sm font-bold ${
+                      isOk ? (darkMode ? 'text-white' : 'text-slate-900') : 
+                      isWarning ? 'text-amber-500' : 
+                      'text-rose-500'
+                    }`}>{item.label}</span>
+                    {item.date && (
+                      <span className="text-[9px] font-bold opacity-60 uppercase tracking-widest">
+                        {isExpired ? 'Expiré le ' : 'Expire le '} {formatDate(item.date.toISOString())}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className={`text-sm font-bold ${item.status === 'ok' ? (darkMode ? 'text-white' : 'text-slate-900') : item.status === 'warning' ? 'text-amber-500' : 'text-rose-500'}`}>{item.label}</span>
-                  {item.date && (
-                    <span className="text-[9px] font-bold opacity-60 uppercase tracking-widest">
-                      {item.status === 'expired' ? 'Expiré le ' : 'Expire le '} {formatDate(item.date.toISOString())}
-                    </span>
-                  )}
-                </div>
+                {isOk ? (
+                  <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                    <Star size={12} strokeWidth={3} />
+                  </div>
+                ) : (
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-black text-[10px] ${
+                    isWarning ? 'bg-amber-500' : 'bg-rose-500'
+                  }`}>!</div>
+                )}
               </div>
-              {item.status === 'ok' ? (
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white">
-                  <Star size={12} strokeWidth={3} />
-                </div>
-              ) : (
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-black text-[10px] ${item.status === 'warning' ? 'bg-amber-500' : 'bg-rose-500'}`}>!</div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -301,7 +333,13 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               <div className="flex items-center gap-3"><Euro size={16} className="text-indigo-500" /><span className="text-sm font-bold">Taux Horaire</span></div>
               <div className="text-right">
                 <div className="flex items-center gap-2 justify-end">
-                  <input type="number" step="0.01" className="bg-transparent text-sm font-black text-indigo-500 outline-none text-right w-20" value={hourlyRate} onChange={(e) => setHourlyRate?.(e.target.value)} />
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    className="bg-transparent text-sm font-black text-indigo-500 outline-none text-right w-20"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate?.(e.target.value)}
+                  />
                   <span className="text-[10px] font-bold text-slate-500">€/h</span>
                 </div>
                 <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Base (Niveau 3)</p>
@@ -323,32 +361,45 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           </div>
           <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
             <div className="flex items-center gap-3"><CalendarDays size={16} className="text-amber-500" /><span className="text-sm font-bold">Entrée Entreprise</span></div>
-            <input type="date" className="bg-transparent text-xs font-black text-amber-500 outline-none text-right" value={contractStartDate} onChange={(e) => setContractStartDate?.(e.target.value)} />
+            <input 
+              type="date" 
+              className="bg-transparent text-xs font-black text-amber-500 outline-none text-right"
+              value={contractStartDate}
+              onChange={(e) => setContractStartDate?.(e.target.value)}
+            />
           </div>
-
           <div className="flex flex-col gap-3 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3"><Calendar size={16} className="text-emerald-500" /><span className="text-sm font-bold">Base Congés (CP)</span></div>
               <div className="flex items-center gap-1 bg-slate-900 rounded-lg p-0.5">
-                <button onClick={() => setCpCalculationMode?.('25')} className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${cpCalculationMode === '25' ? 'bg-emerald-500 text-white' : 'text-slate-500'}`}>25j</button>
-                <button onClick={() => setCpCalculationMode?.('30')} className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${cpCalculationMode === '30' ? 'bg-emerald-500 text-white' : 'text-slate-500'}`}>30j</button>
+                <button 
+                  onClick={() => setCpCalculationMode?.('25')}
+                  className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${cpCalculationMode === '25' ? 'bg-emerald-500 text-white' : 'text-slate-500'}`}
+                >25j</button>
+                <button 
+                  onClick={() => setCpCalculationMode?.('30')}
+                  className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${cpCalculationMode === '30' ? 'bg-emerald-500 text-white' : 'text-slate-500'}`}
+                >30j</button>
               </div>
             </div>
-            <div className="mt-2 space-y-1 text-center border-t border-white/5 pt-3">
-              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
-                {cpCalculationMode === '25' ? 'Cumul : 2.08j / mois (Ouvrés)' : 'Cumul : 2.50j / mois (Ouvrables)'}
-              </p>
-              <p className="text-[8px] font-bold text-slate-500 uppercase">
-                Valeur d'un jour : {(parseFloat(hoursBase) / (cpCalculationMode === '25' ? 5 : 6)).toFixed(2)}h
-              </p>
-            </div>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-center">
+              {cpCalculationMode === '25' ? '2.08j / mois (Ouvrés)' : '2.5j / mois (Ouvrables)'}
+            </p>
           </div>
           
-          <div className="flex flex-col gap-2 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Solde CP Initial</label>
-            <div className="flex items-center gap-2">
-              <input type="number" step="0.5" className="bg-transparent text-sm font-black text-emerald-500 outline-none w-full" value={initialCpBalance} onChange={(e) => setInitialCpBalance(parseFloat(e.target.value) || 0)} />
-              <span className="text-[10px] font-bold text-slate-500">j</span>
+          <div className="grid grid-cols-1">
+            <div className="flex flex-col gap-2 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Solde CP Initial</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number" 
+                  step="0.5"
+                  className="bg-transparent text-sm font-black text-emerald-500 outline-none w-full"
+                  value={initialCpBalance}
+                  onChange={(e) => setInitialCpBalance(parseFloat(e.target.value) || 0)}
+                />
+                <span className="text-[10px] font-bold text-slate-500">j</span>
+              </div>
             </div>
           </div>
         </div>
@@ -360,21 +411,149 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
         <div className="space-y-4">
           <div className="p-4 rounded-2xl bg-slate-500/5 border border-white/5 flex flex-col gap-3">
              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3"><FileBadge size={18} className="text-indigo-500" /><span className="text-sm font-bold">{jobTitle}</span></div>
+                <div className="flex items-center gap-3"><FileBadge size={18} className="text-indigo-500" /><span className="text-sm font-bold">{jobTitle} (Principal)</span></div>
                 <span className="text-[9px] font-black text-indigo-500 uppercase">Actif</span>
              </div>
-             <div className="flex items-center gap-2 text-slate-500 text-[10px] font-bold"><Calendar size={12} /><span>Obtenu le {formatDate(primaryGraduationDate)}</span></div>
+             <div className="flex items-center gap-2 text-slate-500 text-[10px] font-bold">
+                <Calendar size={12} />
+                <span>Obtenu le {formatDate(primaryGraduationDate)}</span>
+             </div>
           </div>
-          {/* Reste des diplômes (DEA, Taxi, Aux, AFGSU, Médical) avec le même style que ton original */}
-          {hasDea && jobTitle !== 'Ambulancier DE' && (
+
+          {hasDea && jobTitle !== 'Ambulancier DE' && jobTitle !== 'Auxiliaire ambulancier' && (
             <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3"><ShieldCheck size={18} className="text-emerald-500" /><span className="text-sm font-bold">Diplôme d'État (DEA)</span></div>
                 <span className="text-[9px] font-black text-emerald-500 uppercase">Certifié</span>
               </div>
+              <div className="flex items-center gap-2 text-emerald-500/60 text-[10px] font-bold">
+                <Calendar size={12} />
+                <span>Obtenu le {formatDate(deaDate)}</span>
+              </div>
             </div>
           )}
-          {/* Simplifié pour la clarté mais garde ta logique originale */}
+
+          {hasTaxiCard && jobTitle !== 'Chauffeur taxi' && (
+            <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3"><Car size={18} className="text-blue-500" /><span className="text-sm font-bold">Carte Pro Taxi</span></div>
+                <span className="text-[9px] font-black text-blue-500 uppercase">Valide</span>
+              </div>
+              <div className="flex items-center gap-2 text-blue-500/60 text-[10px] font-bold">
+                <Calendar size={12} />
+                <span>Obtenu le {formatDate(taxiDate)}</span>
+              </div>
+            </div>
+          )}
+
+          {hasAux && jobTitle !== 'Auxiliaire ambulancier' && jobTitle !== 'Ambulancier DE' && (
+            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3"><Users size={18} className="text-amber-500" /><span className="text-sm font-bold">Certificat Auxiliaire</span></div>
+                <span className="text-[9px] font-black text-amber-500 uppercase">Actif</span>
+              </div>
+              <div className="flex items-center gap-2 text-amber-500/60 text-[10px] font-bold">
+                <Calendar size={12} />
+                <span>Obtenu le {formatDate(auxDate)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* AFGSU 2 */}
+          <div className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all ${
+            afgsuDate ? 'bg-indigo-500/5 border-indigo-500/10' : 'bg-rose-500/5 border-rose-500/10'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ShieldCheck size={18} className={afgsuDate ? 'text-indigo-500' : 'text-rose-500'} />
+                <span className="text-sm font-bold">AFGSU 2</span>
+              </div>
+              <input 
+                type="date" 
+                className="bg-transparent text-[10px] font-black text-indigo-500 outline-none text-right"
+                value={afgsuDate}
+                onChange={(e) => setAfgsuDate?.(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-bold">
+              <span className="text-slate-500 uppercase tracking-widest">Dernier recyclage (4 ans)</span>
+              {afgsuDate && (
+                <span className="text-indigo-400">Expire le {formatDate(new Date(new Date(afgsuDate).setFullYear(new Date(afgsuDate).getFullYear() + 4)).toISOString())}</span>
+              )}
+            </div>
+          </div>
+
+          {/* MEDICAL */}
+          <div className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all ${
+            medicalExpiryDate ? 'bg-indigo-500/5 border-indigo-500/10' : 'bg-rose-500/5 border-rose-500/10'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Clock size={18} className={medicalExpiryDate ? 'text-indigo-500' : 'text-rose-500'} />
+                <span className="text-sm font-bold uppercase tracking-tight">Aptitude Préfectorale</span>
+              </div>
+              <input 
+                type="date" 
+                className="bg-transparent text-[10px] font-black text-indigo-500 outline-none text-right"
+                value={medicalExpiryDate}
+                onChange={(e) => setMedicalExpiryDate?.(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-bold">
+              <span className="text-slate-500 uppercase tracking-widest">Date de visite (5 ans)</span>
+              {medicalExpiryDate && (
+                <span className="text-indigo-400">Expire le {formatDate(new Date(new Date(medicalExpiryDate).setFullYear(new Date(medicalExpiryDate).getFullYear() + 5)).toISOString())}</span>
+              )}
+            </div>
+          </div>
+
+          {/* TAXI CARTE PRO & FPC */}
+          {hasTaxiCard && (
+            <>
+              <div className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all ${
+                taxiCardExpiryDate ? 'bg-indigo-500/5 border-indigo-500/10' : 'bg-rose-500/5 border-rose-500/10'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Car size={18} className={taxiCardExpiryDate ? 'text-indigo-500' : 'text-rose-500'} />
+                    <span className="text-sm font-bold">Carte Pro Taxi</span>
+                  </div>
+                  <input 
+                    type="date" 
+                    className="bg-transparent text-[10px] font-black text-indigo-500 outline-none text-right"
+                    value={taxiCardExpiryDate}
+                    onChange={(e) => setTaxiCardExpiryDate?.(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[9px] font-bold">
+                  <span className="text-slate-500 uppercase tracking-widest">Date d'expiration</span>
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all ${
+                taxiFpcDate ? 'bg-indigo-500/5 border-indigo-500/10' : 'bg-rose-500/5 border-rose-500/10'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <RefreshCw size={18} className={taxiFpcDate ? 'text-indigo-500' : 'text-rose-500'} />
+                    <span className="text-sm font-bold">FPC Taxi</span>
+                  </div>
+                  <input 
+                    type="date" 
+                    className="bg-transparent text-[10px] font-black text-indigo-500 outline-none text-right"
+                    value={taxiFpcDate}
+                    onChange={(e) => setTaxiFpcDate?.(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[9px] font-bold">
+                  <span className="text-slate-500 uppercase tracking-widest">Dernier stage (5 ans)</span>
+                  {taxiFpcDate && (
+                    <span className="text-indigo-400">Expire le {formatDate(new Date(new Date(taxiFpcDate).setFullYear(new Date(taxiFpcDate).getFullYear() + 5)).toISOString())}</span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -386,7 +565,14 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             <div className="flex items-center gap-3"><div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">{darkMode ? <Moon size={18} /> : <Sun size={18} />}</div><span className="text-sm font-bold">Thème automatique</span></div>
             <button onClick={() => setFollowSystemTheme(!followSystemTheme)} className={`w-12 h-6 rounded-full relative transition-all ${followSystemTheme ? 'bg-indigo-600' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${followSystemTheme ? 'left-7' : 'left-1'}`} /></button>
           </div>
-          {/* Notifications & Géo (Logique originale) */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3"><div className="p-2 rounded-xl bg-amber-500/10 text-amber-500"><Bell size={18} /></div><span className="text-sm font-bold">Notifications Push</span></div>
+            <button onClick={() => setPushEnabled(!pushEnabled)} className={`w-12 h-6 rounded-full relative transition-all ${pushEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${pushEnabled ? 'left-7' : 'left-1'}`} /></button>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3"><div className="p-2 rounded-xl bg-violet-500/10 text-violet-500"><MapPin size={18} /></div><span className="text-sm font-bold">Géolocalisation Auto</span></div>
+            <button onClick={() => setAutoGeo(!autoGeo)} className={`w-12 h-6 rounded-full relative transition-all ${autoGeo ? 'bg-indigo-600' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${autoGeo ? 'left-7' : 'left-1'}`} /></button>
+          </div>
         </div>
       </div>
 
