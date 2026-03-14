@@ -1,11 +1,12 @@
-const CACHE_NAME = 'ambuflow-v1';
+const CACHE_NAME = 'ambuflow-v2'; // Forcer la mise à jour
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/pwa-512x512.png' // On met ton logo en cache
 ];
 
-// Installation : Mise en cache des fichiers de base
+// Installation : On force la prise de contrôle immédiate
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -15,43 +16,40 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activation : Nettoyage des vieux caches
+// Activation : On NETTOIE l'ancien cache "v1" (le bleu)
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            return caches.delete(cache);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
-// Fetch : Stratégie de cache pour valider l'installation PWA
+// Récupération des fichiers : Réseau d'abord, sinon Cache
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });
 
-// --- Tes Notifications existantes ---
+// Notifications (Code fusionné et nettoyé)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SCHEDULE_NOTIFICATION') {
-    const { title, body, delay, urgency, icon } = event.data;
+    const { title, body, delay } = event.data;
     setTimeout(() => {
-      const options = {
+      self.registration.showNotification(title, {
         body: body,
-        icon: icon || 'https://cdn-icons-png.flaticon.com/512/1022/1022213.png',
-        vibrate: urgency === 'high' ? [300, 100, 300, 100, 400] : [100, 50, 100],
-        badge: 'https://cdn-icons-png.flaticon.com/512/1022/1022213.png',
-        tag: 'ambuflow-alert'
-      };
-      self.registration.showNotification(title, options);
+        icon: '/pwa-512x512.png',
+        badge: '/pwa-512x512.png',
+        vibrate: [200, 100, 200],
+        tag: 'alert-ambulancier'
+      });
     }, delay);
   }
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((list) => {
-      if (list.length > 0) return list[0].focus();
-      return clients.openWindow('/');
-    })
-  );
 });
