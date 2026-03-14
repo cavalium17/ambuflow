@@ -168,7 +168,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     isActive: false,
     type: 'repas',
     start: '12:00',
-    duration: 45,
+    duration: 30,
     location: 'Entreprise'
   });
 
@@ -737,13 +737,13 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                       {!tempBreak.isActive ? (
                         <div className="grid grid-cols-2 gap-3">
                           <button 
-                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'cafe', duration: 15, start: '10:00' })}
+                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'cafe', duration: 20, start: '10:00' })}
                             className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
                           >
                             <Coffee size={14} /> Pause Café
                           </button>
                           <button 
-                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 45, start: '12:00' })}
+                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 30, start: '12:00' })}
                             className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
                           >
                             <Utensils size={14} /> Coupure Repas
@@ -775,7 +775,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                               <input 
                                 type="range" 
                                 min="1" 
-                                max="60" 
+                                max="90" 
                                 className="w-full h-1.5 bg-slate-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
                                 value={tempBreak.duration} 
                                 onChange={e => setTempBreak({ ...tempBreak, duration: parseInt(e.target.value) })} 

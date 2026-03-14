@@ -1,9 +1,11 @@
-import { initializeApp } from "firebase/app";
-import { getStorage } from "firebase/storage";
-import { getMessaging, Messaging, getToken, onMessage } from "firebase/messaging";
 
+import { initializeApp } from "firebase/app";
+import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
+import { getStorage } from "firebase/storage";
+
+// Ces valeurs doivent être récupérées depuis la console Firebase (https://console.firebase.google.com/)
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  apiKey: "AIzaSyA_kth_5Ykhm7X1zlc1TWuPoOZRx2RqZtc",
   authDomain: "ambuflow-e5ffc.firebaseapp.com",
   projectId: "ambuflow-e5ffc",
   storageBucket: "ambuflow-e5ffc.firebasestorage.app",
@@ -12,17 +14,14 @@ const firebaseConfig = {
   measurementId: "G-CLQE06YVBK"
 };
 
-// Clé VAPID (Web Push)
+// Clé VAPID publique (Web Push) - À générer dans Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
 export const VAPID_KEY = "BCtoGbVvlqhGFK4QDOD1OtQMdydaMrKK_EKDp1-zBvEv9Yc46yTBCJrj1Z3YmFk1MtvfxoMqv5MCHyi4xpZOzsw";
 
-// 1. Initialiser Firebase
 const app = initializeApp(firebaseConfig);
-
-// 2. Export Storage
 export const storage = getStorage(app);
-
-// 3. Configuration Messagerie
 let messaging: Messaging | null = null;
+
+// Initialisation sécurisée (évite les erreurs sur les navigateurs non compatibles)
 try {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     messaging = getMessaging(app);
@@ -30,24 +29,33 @@ try {
 } catch (err) {
   console.error("FCM non supporté:", err);
 }
+
 export { messaging };
 
-// 4. La fonction qui manquait (requestForToken)
 export const requestForToken = async () => {
   if (!messaging) return null;
+  
   try {
     const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
-    return currentToken;
+    if (currentToken) {
+      console.log('FCM Token:', currentToken);
+      console.log("Mon Token : ", currentToken);
+      // Ici, vous devriez envoyer le token à votre backend pour cibler cet utilisateur
+      return currentToken;
+    } else {
+      console.log('Aucun token de registration disponible. Demandez la permission.');
+      return null;
+    }
   } catch (err) {
-    console.error('Erreur Token:', err);
+    console.log('Erreur lors de la récupération du token:', err);
     return null;
   }
 };
 
-// 5. Listener de messages
 export const onMessageListener = (callback: (payload: any) => void) => {
   if (!messaging) return () => {};
-  return onMessage(messaging, (payload) => callback(payload));
+  return onMessage(messaging, (payload) => {
+    console.log("Message reçu en premier plan:", payload);
+    callback(payload);
+  });
 };
-
-export default app;

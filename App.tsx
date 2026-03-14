@@ -56,12 +56,13 @@ import Onboarding from './components/Onboarding';
 import ProfileTab from './components/ProfileTab';
 import PushNotification from './components/PushNotification';
 import DailyRecap from './components/DailyRecap';
-import { requestForToken, onMessageListener } from './src/firebaseConfig';
-import NavigationChoiceModal from './src/components/NavigationChoiceModal';
-import { getRestaurantSuggestion, findNearbyRestos, RestaurantSuggestion } from './services/restaurantService';
+// import { requestForToken, onMessageListener } from './src/firebaseConfig';
 import { requestNotificationPermissions, requestLocationPermissions, setupNotificationChannels } from './services/notificationManager';
 
 // Helper pour calculer les jours fériés français
+const BREAK_MIN_DURATION = 20 * 60; // 20 minutes en secondes
+const MEAL_MIN_DURATION = 30 * 60; // 30 minutes en secondes
+const MAX_BREAK_DURATION = 90 * 60; // 1h30 en secondes
 const getFrenchPublicHolidays = (year: number) => {
   const holidays = [
     `${year}-01-01`, // Nouvel An
@@ -107,7 +108,9 @@ const isSundayOrHoliday = (dateStr: string) => {
 };
 
 const App: React.FC = () => {
+  const isLoggedIn = true; // Simulation de connexion pour l'aperçu AI Studio
   const [activeTab, setActiveTab] = useState<AppTab>('home');
+
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [gainsCarouselIndex, setGainsCarouselIndex] = useState(0);
   const [showDailyRecap, setShowDailyRecap] = useState(false);
@@ -155,87 +158,6 @@ const App: React.FC = () => {
     };
     setNotifications(prev => [newNotify, ...prev]);
   }, [pushEnabled]);
-
-  const sendMealNotification = useCallback(async () => {
-    console.log("sendMealNotification: Déclenchement en arrière-plan...");
-    
-    setIsSearchingResto(true);
-
-    // Timeout de 10 secondes pour la recherche globale
-    const searchTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000));
-
-    // Récupération de la position en temps réel
-    const posPromise = new Promise<{latitude: number, longitude: number} | null>((resolve) => {
-      if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            resolve({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude
-            });
-          },
-          (error) => {
-            console.error("Erreur géolocalisation:", error);
-            resolve(null);
-          },
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
-      } else {
-        resolve(null);
-      }
-    });
-
-    // On attend soit la position, soit le timeout de 10s
-    let pos = await Promise.race([posPromise, searchTimeout]);
-
-    if (!pos) {
-      pos = currentGeoPosition;
-    }
-
-    if (!pos) {
-      console.log("sendMealNotification: Position GPS manquante, tentative de récupération forcée...");
-      pos = await requestLocationPermissions();
-    }
-
-    if (pos) {
-      setCurrentGeoPosition(pos);
-    } else {
-      console.log("sendMealNotification: Échec de récupération de la position");
-      setIsSearchingResto(false);
-      return;
-    }
-
-    const activeShift = shifts.find(s => s.id === activeShiftId);
-    const vehicle = activeShift?.vehicle || 'AMBU';
-
-    console.log("sendMealNotification: Recherche restaurant pour", vehicle, "à", pos);
-    
-    // On race aussi la recherche de restaurant contre le timeout restant
-    const suggestionPromise = getRestaurantSuggestion(
-      vehicle,
-      pos.latitude,
-      pos.longitude
-    );
-
-    const suggestion = await Promise.race([suggestionPromise, searchTimeout]);
-
-    setIsSearchingResto(false);
-
-    if (suggestion) {
-      console.log("sendMealNotification: Suggestion trouvée:", suggestion.name);
-      setMealSuggestion(suggestion);
-      console.log("Notification envoyée au gestionnaire système");
-      addNotification(
-        "🍴 Resto trouvé !",
-        `${suggestion.name} est à ${suggestion.distanceMinutes} min. Ouvrir dans Waze/Maps ?`,
-        "info",
-        undefined,
-        'open_navigation'
-      );
-    } else {
-      console.log("sendMealNotification: Aucune suggestion trouvée ou timeout");
-    }
-  }, [pushEnabled, currentGeoPosition, shifts, activeShiftId, addNotification]);
 
 
 
@@ -329,10 +251,6 @@ const App: React.FC = () => {
   const [afgsuDate, setAfgsuDate] = useState(() => localStorage.getItem('ambuflow_afgsu_date') || "");
   const [medicalExpiryDate, setMedicalExpiryDate] = useState(() => localStorage.getItem('ambuflow_medical_expiry') || localStorage.getItem('date_aptitude_medicale')?.split('T')[0] || "");
 
-  const [mealSuggestion, setMealSuggestion] = useState<RestaurantSuggestion | null>(null);
-  const [isSearchingResto, setIsSearchingResto] = useState(false);
-  const [isNavigationModalOpen, setIsNavigationModalOpen] = useState(false);
-
   // Permissions et Notifications
   useEffect(() => {
     // Demande de permissions Notifications
@@ -340,11 +258,11 @@ const App: React.FC = () => {
       if (Notification.permission === "default") {
         Notification.requestPermission().then(permission => {
           if (permission === 'granted') {
-            requestForToken();
+            // requestForToken();
           }
         });
       } else if (Notification.permission === 'granted') {
-        requestForToken();
+        // requestForToken();
       }
     }
     // Demande de permissions Géo
@@ -357,6 +275,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!pushEnabled) return;
 
+    /*
     const unsubscribe = onMessageListener((payload: any) => {
       if (payload?.notification) {
         addNotification(
@@ -369,14 +288,14 @@ const App: React.FC = () => {
       // Déclenchement personnalisé via Data Payload
       if (payload?.data?.type === 'MEAL_TRIGGER') {
         console.log("FCM: Déclenchement à distance de la suggestion repas");
-        sendMealNotification();
       }
     });
 
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [pushEnabled, addNotification, sendMealNotification]);
+    */
+  }, [pushEnabled, addNotification]);
 
   // Notification Restaurant Automatique
   useEffect(() => {
@@ -392,7 +311,6 @@ const App: React.FC = () => {
         const mealKey = `meal_notif_${todayStr}_${hour < 15 ? 'lunch' : 'dinner'}`;
         
         if (!localStorage.getItem(mealKey)) {
-          sendMealNotification();
           localStorage.setItem(mealKey, 'true');
         }
       }
@@ -421,7 +339,7 @@ const App: React.FC = () => {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [status, activeShiftId, shifts, sendMealNotification, pushEnabled]);
+  }, [status, activeShiftId, shifts, pushEnabled]);
 
   const [hoursBase, setHoursBase] = useState(() => localStorage.getItem('ambuflow_hours_base') || "35");
   const [cpCalculationMode, setCpCalculationMode] = useState(() => localStorage.getItem('ambuflow_cp_mode') || "25");
@@ -637,15 +555,13 @@ const App: React.FC = () => {
     setStatus(ServiceStatus.WORKING);
     setBreakEndTimeActual(null);
     setBreakStartDateTime(null);
-    setMealSuggestion(null);
     addLog("Reprise de mission", "resume");
   }, [activeShiftId, status, currentTime, addLog]);
 
   const handleOpenBreakModal = useCallback((type: 'meal' | 'coffee') => {
     setBreakType(type);
-    setMealSuggestion(null);
     setBreakStartTime(currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
-    setBreakDuration(type === 'meal' ? 45 : 15);
+    setBreakDuration(type === 'meal' ? 30 : 20);
     setBreakLocation('Entreprise');
     setShowBreakModal(true);
   }, [currentTime]);
@@ -706,19 +622,13 @@ const App: React.FC = () => {
       console.log("Bouton cliqué: Passage en pause");
       setStatus(ServiceStatus.BREAK);
       addLog(breakType === 'meal' ? "Pause Déjeuner" : "Pause Café", "break");
-      
-      // Suggestion de restauration si c'est un repas à l'extérieur (EN ARRIÈRE-PLAN)
-      if (breakType === 'meal' && breakLocation === 'Extérieur') {
-        console.log("handleConfirmBreak: Lancement recherche resto en arrière-plan");
-        sendMealNotification(); // Pas de await ici
-      }
     } else {
       addLog(breakType === 'meal' ? "Modification Déjeuner" : "Modification Café", "break");
     }
     
     setShowBreakModal(false);
     setActiveTab('home'); // Redirection vers le Board
-  }, [breakStartTime, breakDuration, breakLocation, breakType, currentTime, activeShiftId, addLog, status, sendMealNotification]);
+  }, [breakStartTime, breakDuration, breakLocation, breakType, currentTime, activeShiftId, addLog, status]);
 
   const handleLogout = useCallback(() => {
     setShowOnboarding(true);
@@ -904,16 +814,26 @@ const App: React.FC = () => {
     const [y, mon, d] = activeShift.day.split('-').map(Number);
     const [startH, startM] = activeShift.start.split(':').map(Number);
     const startDate = new Date(y, mon - 1, d, startH, startM, 0, 0);
-    let effectiveNow = (status === ServiceStatus.BREAK && activeShift.breaks?.length) 
-        ? new Date(y, mon - 1, d, parseInt(activeShift.breaks[activeShift.breaks.length-1].start.split(':')[0]), parseInt(activeShift.breaks[activeShift.breaks.length-1].start.split(':')[1]))
+    
+    const isCurrentlyInBreak = status === ServiceStatus.BREAK && activeShift.breaks?.length;
+    const lastBreak = isCurrentlyInBreak ? activeShift.breaks![activeShift.breaks!.length - 1] : null;
+    
+    let effectiveNow = isCurrentlyInBreak 
+        ? new Date(y, mon - 1, d, parseInt(lastBreak!.start.split(':')[0]), parseInt(lastBreak!.start.split(':')[1]))
         : currentTime;
+        
     let diffMs = effectiveNow.getTime() - startDate.getTime();
     if (diffMs < 0) return "00:00:00";
-    if (activeShift.breaks) activeShift.breaks.forEach(b => { 
-      if (b.end !== '--:--' || (status === ServiceStatus.BREAK && b.id === activeShift.breaks?.[activeShift.breaks.length-1].id)) {
-        diffMs -= (b.duration * 60000); 
-      }
-    });
+    
+    if (activeShift.breaks) {
+      activeShift.breaks.forEach(b => { 
+        // On ne soustrait que les pauses terminées AVANT le moment effectif actuel
+        // Si on est en pause, effectiveNow est le début de la pause actuelle, donc on ne la soustrait pas
+        if (b.end !== '--:--' && b.id !== lastBreak?.id) {
+          diffMs -= (b.duration * 60000); 
+        }
+      });
+    }
     const h = Math.floor(Math.max(0, diffMs) / 3600000);
     const m = Math.floor((Math.max(0, diffMs) % 3600000) / 60000);
     const s = Math.floor((Math.max(0, diffMs) % 60000) / 1000);
@@ -1262,24 +1182,6 @@ const App: React.FC = () => {
     return `${days > 0 ? `J-${days} ` : ''}${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const refreshMealSuggestion = useCallback(() => {
-    if (activeShiftId) {
-      const activeShift = shifts.find(s => s.id === activeShiftId);
-      if (activeShift) {
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-          const suggestion = await getRestaurantSuggestion(
-            activeShift.vehicle,
-            pos.coords.latitude,
-            pos.coords.longitude
-          );
-          if (suggestion) {
-            setMealSuggestion(suggestion);
-          }
-        });
-      }
-    }
-  }, [activeShiftId, shifts]);
-
   const renderHome = () => {
     const bentoCardBase = `relative overflow-hidden transition-all duration-500 rounded-[32px] border ${effectiveDarkMode ? 'bg-slate-900/60 border-white/5 shadow-2xl shadow-black/40' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/40'} backdrop-blur-xl`;
     const nextCountdown = getNextShiftCountdown();
@@ -1290,13 +1192,21 @@ const App: React.FC = () => {
     
     const isBreakActive = status === ServiceStatus.BREAK && (!breakStartDateTime || currentTime >= breakStartDateTime);
     
+    const activeShift = activeShiftId ? shifts.find(s => s.id === activeShiftId) : null;
+    const lastBreak = activeShift?.breaks?.[activeShift.breaks.length - 1];
+    
+    const minBreakDuration = lastBreak?.isMeal ? MEAL_MIN_DURATION : BREAK_MIN_DURATION;
+    const elapsedBreakSeconds = status === ServiceStatus.BREAK && breakStartDateTime 
+      ? Math.floor((currentTime.getTime() - breakStartDateTime.getTime()) / 1000) 
+      : 0;
+
+    const isBreakFinished = status === ServiceStatus.BREAK && elapsedBreakSeconds >= MAX_BREAK_DURATION;
+    const canResume = status === ServiceStatus.BREAK && elapsedBreakSeconds >= minBreakDuration;
+    
     let breakBackgroundImage = 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=800'; 
     let breakLabel = "COUPURE";
     
     if (isBreakActive && activeShiftId) {
-      const activeShift = shifts.find(s => s.id === activeShiftId);
-      const lastBreak = activeShift?.breaks?.[activeShift.breaks.length - 1];
-      
       if (lastBreak?.isMeal) {
         breakLabel = "COUPURE REPAS";
         if (lastBreak.location === 'Entreprise') {
@@ -1436,10 +1346,14 @@ const App: React.FC = () => {
               <div className="animate-fadeIn">
                  <p className="text-[10px] font-black uppercase opacity-40 tracking-widest mb-2">
                    {status === ServiceStatus.BREAK 
-                     ? (breakStartDateTime && currentTime < breakStartDateTime ? 'Début dans' : 'Temps restant') 
+                     ? (breakStartDateTime && currentTime < breakStartDateTime 
+                        ? 'Début dans' 
+                        : (elapsedBreakSeconds >= MAX_BREAK_DURATION 
+                           ? 'ALERTE' 
+                           : (elapsedBreakSeconds < minBreakDuration ? 'Avant Minimum' : 'Avant Maximum'))) 
                      : (status === ServiceStatus.OFF ? (isTodayFinished ? 'Total Travaillé' : 'Heure actuelle') : 'Compteur journalier')}
                  </p>
-                 <h1 className="text-7xl font-black tabular-nums tracking-tighter leading-none drop-shadow-2xl">
+                 <h1 className={`font-black tabular-nums tracking-tighter leading-none drop-shadow-2xl ${isBreakFinished ? 'text-rose-500 animate-blink-red text-4xl py-4' : 'text-7xl'}`}>
                    {status === ServiceStatus.BREAK ? (() => { 
                      if (breakStartDateTime && currentTime < breakStartDateTime) {
                        const diff = breakStartDateTime.getTime() - currentTime.getTime();
@@ -1447,12 +1361,19 @@ const App: React.FC = () => {
                        const s = Math.floor((diff % 60000) / 1000);
                        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                      }
-                     if (!breakEndTimeActual) return "00:00"; 
-                     const diff = breakEndTimeActual.getTime() - currentTime.getTime(); 
-                     if (diff <= 0) return "00:00"; 
-                     const m = Math.floor(diff / 60000); 
-                     const s = Math.floor((diff % 60000) / 1000); 
-                     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`; 
+                     if (!breakStartDateTime) return "00:00";
+                     
+                     if (elapsedBreakSeconds >= MAX_BREAK_DURATION) {
+                       return "DURÉE MAX ATTEINTE";
+                     }
+
+                     const timeLeft = elapsedBreakSeconds < minBreakDuration 
+                       ? minBreakDuration - elapsedBreakSeconds 
+                       : MAX_BREAK_DURATION - elapsedBreakSeconds;
+                       
+                     const m = Math.floor(timeLeft / 60);
+                     const s = timeLeft % 60;
+                     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                    })() : status === ServiceStatus.OFF ? (isTodayFinished ? (() => {
                      const [h1, m1] = todayShift!.start.split(':').map(Number);
                      const [h2, m2] = todayShift!.end.split(':').map(Number);
@@ -1486,48 +1407,19 @@ const App: React.FC = () => {
                 </>
               ) : (
                 <div className="space-y-3">
-                  {isSearchingResto && (
-                    <div className="p-4 rounded-[24px] bg-white/5 border border-white/10 flex items-center gap-3 animate-pulse">
-                      <div className="w-5 h-5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Recherche resto en cours...</p>
-                    </div>
-                  )}
-                  {mealSuggestion && (
-                    <div className="p-4 rounded-[24px] bg-indigo-600 border border-indigo-400 text-white animate-popIn shadow-lg shadow-indigo-500/20">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <Utensils size={16} />
-                          <div>
-                            <p className="text-[8px] font-black uppercase tracking-widest opacity-80 mb-0.5">🍴 Resto trouvé à {mealSuggestion.distanceMinutes} min !</p>
-                            <h4 className="text-sm font-black tracking-tight">{mealSuggestion.name}</h4>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/20 text-white text-[8px] font-black">
-                          <Star size={8} fill="currentColor" /> {mealSuggestion.rating}
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between mt-3">
-                        <p className="text-[9px] font-bold opacity-80">Ouvrir dans Waze/Maps ?</p>
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${mealSuggestion.latitude},${mealSuggestion.longitude}`, '_blank')}
-                            className="px-3 py-1.5 rounded-lg bg-white text-indigo-600 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
-                          >
-                            Maps
-                          </button>
-                          <button 
-                            onClick={() => window.open(`https://waze.com/ul?ll=${mealSuggestion.latitude},${mealSuggestion.longitude}&navigate=yes`, '_blank')}
-                            className="px-3 py-1.5 rounded-lg bg-white text-indigo-600 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
-                          >
-                            Waze
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <div className="flex gap-3 animate-slideUp">
                     <button onClick={handleModifyBreak} className="flex-1 py-5 rounded-[24px] bg-white/10 backdrop-blur-md border border-white/20 text-white font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 active:scale-95 transition-all">MODIFIER</button>
-                    <button onClick={handleResume} className="flex-[2] py-5 rounded-[24px] bg-white text-amber-600 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl"><Zap size={18} fill="currentColor" /> Reprendre</button>
+                    <button 
+                      onClick={handleResume} 
+                      disabled={!canResume}
+                      className={`flex-[2] py-5 rounded-[24px] font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl ${
+                        canResume 
+                          ? 'bg-white text-amber-600' 
+                          : 'bg-white/20 text-white/40 cursor-not-allowed'
+                      }`}
+                    >
+                      <Zap size={18} fill="currentColor" /> Reprendre
+                    </button>
                   </div>
                 </div>
               )}
@@ -1754,7 +1646,7 @@ const App: React.FC = () => {
                     <input 
                       type="range" 
                       min="1" 
-                      max="120" 
+                      max="90" 
                       step="1" 
                       className="w-full h-2.5 bg-indigo-500/10 dark:bg-slate-800 rounded-full appearance-none cursor-pointer accent-indigo-500" 
                       value={breakDuration} 
@@ -1762,8 +1654,8 @@ const App: React.FC = () => {
                     />
                     <div className="flex justify-between mt-2 text-[8px] font-black text-slate-500 uppercase tracking-widest opacity-40">
                       <span>1m</span>
-                      <span>60m</span>
-                      <span>120m</span>
+                      <span>45m</span>
+                      <span>90m</span>
                     </div>
                   </div>
                 </div>
@@ -1798,47 +1690,11 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                {isSearchingResto && (
-                  <div className="flex flex-col items-center gap-3 py-4 animate-pulse">
-                    <div className="w-12 h-12 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
-                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Recherche d'un resto...</p>
-                  </div>
-                )}
-
-                {mealSuggestion && breakLocation === 'Extérieur' && (
-                  <div className="p-5 rounded-3xl bg-indigo-600/10 border border-indigo-500/20 space-y-4 animate-popIn">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center text-white">
-                        <Utensils size={20} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-black text-white">{mealSuggestion.name}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{mealSuggestion.distanceMinutes} min • {mealSuggestion.address}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button 
-                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${mealSuggestion.latitude},${mealSuggestion.longitude}`, '_blank')}
-                        className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                      >
-                        Google Maps
-                      </button>
-                      <button 
-                        onClick={() => window.open(`https://waze.com/ul?ll=${mealSuggestion.latitude},${mealSuggestion.longitude}&navigate=yes`, '_blank')}
-                        className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                      >
-                        Waze
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 <button 
                   onClick={handleConfirmBreak} 
-                  disabled={isSearchingResto}
-                  className="w-full py-6 rounded-[28px] bg-indigo-600 text-white font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(79,70,229,0.3)] active:scale-95 transition-all flex items-center justify-center gap-3 border border-indigo-400/50 disabled:opacity-50"
+                  className="w-full py-6 rounded-[28px] bg-indigo-600 text-white font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(79,70,229,0.3)] active:scale-95 transition-all flex items-center justify-center gap-3 border border-indigo-400/50"
                 >
-                  <CheckCircle size={24} strokeWidth={3} /> {mealSuggestion && breakLocation === 'Extérieur' ? 'TERMINER' : 'CONFIRMER'}
+                  <CheckCircle size={24} strokeWidth={3} /> CONFIRMER
                 </button>
               </div>
             </div>
@@ -1850,7 +1706,28 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen transition-colors duration-500 font-sans pb-28 flex flex-col relative ${effectiveDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>
-      <style>{`
+      <AnimatePresence mode="wait">
+        {showOnboarding ? (
+          <motion.div
+            key="onboarding"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1, ease: "easeInOut" }}
+            className="fixed inset-0 z-[100]"
+          >
+            <Onboarding darkMode={effectiveDarkMode} onComplete={(data: any) => { setShowOnboarding(false); setUserName(data.userName); if (data.profileImage) setProfileImage(data.profileImage); setJobTitle(data.jobTitle); setHourlyRate(data.hourlyRate); setCompanyName(data.companyName); setHasDea(data.hasDea); setHasAux(data.hasAux); setHasTaxiCard(data.hasTaxiCard); setPrimaryGraduationDate(data.primaryGraduationDate); setDeaDate(data.deaDate); setAuxDate(data.auxDate); setTaxiDate(data.taxiDate); setTaxiCardExpiryDate(data.taxiCardExpiryDate); setTaxiFpcDate(data.taxiFpcDate); setAfgsuDate(data.afgsuDate); setMedicalExpiryDate(data.medicalExpiryDate); setContractStartDate(data.contractStartDate); setHoursBase(data.hoursBase); setCpCalculationMode(data.cpCalculationMode); setInitialCpBalance(parseFloat(data.initialCpBalance || "0")); setOvertimeMode(data.overtimeMode); setModulationStartDate(data.modulationStartDate); setModulationWeeks(data.modulationWeeks); setPushEnabled(data.notifications); setAutoGeo(data.geo); }} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="main-app"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1, ease: "easeInOut" }}
+            className="flex-1 flex flex-col"
+          >
+            <style>{`
         @keyframes pulse-border {
           0% { border-color: rgba(244, 63, 94, 0.3); box-shadow: 0 0 0px rgba(244, 63, 94, 0); }
           50% { border-color: rgba(244, 63, 94, 1); box-shadow: 0 0 30px rgba(244, 63, 94, 0.6); }
@@ -1863,21 +1740,26 @@ const App: React.FC = () => {
         .animate-fadeIn { animation: fadeIn 0.8s ease-out forwards; }
         @keyframes popIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         .animate-popIn { animation: popIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes blink-red {
+          0%, 100% { color: #f43f5e; opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+        .animate-blink-red { animation: blink-red 1s infinite; }
       `}</style>
       <div className="fixed top-0 left-0 right-0 z-[200] pointer-events-none">
-        {notifications.map(notify => (
-          <PushNotification 
-            key={notify.id} 
-            notification={notify} 
-            darkMode={effectiveDarkMode} 
-            onClose={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
-            onAction={(action) => {
-              if (action === 'open_navigation') setIsNavigationModalOpen(true);
-            }}
-          />
-        ))}
+        <div className="flex flex-col gap-3 w-full max-w-md mx-auto px-6 pt-6">
+          {notifications.map(notify => (
+            <PushNotification 
+              key={notify.id} 
+              notification={notify} 
+              darkMode={effectiveDarkMode} 
+              onClose={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
+              onAction={(action) => {
+              }}
+            />
+          ))}
+        </div>
       </div>
-      {showOnboarding && <Onboarding darkMode={effectiveDarkMode} onComplete={(data: any) => { setShowOnboarding(false); setUserName(data.userName); if (data.profileImage) setProfileImage(data.profileImage); setJobTitle(data.jobTitle); setHourlyRate(data.hourlyRate); setCompanyName(data.companyName); setHasDea(data.hasDea); setHasAux(data.hasAux); setHasTaxiCard(data.hasTaxiCard); setPrimaryGraduationDate(data.primaryGraduationDate); setDeaDate(data.deaDate); setAuxDate(data.auxDate); setTaxiDate(data.taxiDate); setTaxiCardExpiryDate(data.taxiCardExpiryDate); setTaxiFpcDate(data.taxiFpcDate); setAfgsuDate(data.afgsuDate); setMedicalExpiryDate(data.medicalExpiryDate); setContractStartDate(data.contractStartDate); setHoursBase(data.hoursBase); setCpCalculationMode(data.cpCalculationMode); setInitialCpBalance(parseFloat(data.initialCpBalance || "0")); setOvertimeMode(data.overtimeMode); setModulationStartDate(data.modulationStartDate); setModulationWeeks(data.modulationWeeks); setPushEnabled(data.notifications); setAutoGeo(data.geo); }} />}
       
       {showDailyRecap && lastFinishedShift && (
         <DailyRecap 
@@ -1885,18 +1767,6 @@ const App: React.FC = () => {
           userStats={userStats}
           hourlyRate={effectiveHourlyRate}
           onClose={() => setShowDailyRecap(false)}
-          darkMode={effectiveDarkMode}
-        />
-      )}
-
-      {mealSuggestion && (
-        <NavigationChoiceModal 
-          isOpen={isNavigationModalOpen}
-          onClose={() => setIsNavigationModalOpen(false)}
-          latitude={mealSuggestion.latitude}
-          longitude={mealSuggestion.longitude}
-          address={mealSuggestion.address}
-          name={mealSuggestion.name}
           darkMode={effectiveDarkMode}
         />
       )}
@@ -1985,7 +1855,10 @@ const App: React.FC = () => {
           setAutoGeo={setAutoGeo}
         />}
       </main>
-      <Navigation activeTab={activeTab} setActiveTab={setActiveTab} darkMode={effectiveDarkMode} />
+            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} darkMode={effectiveDarkMode} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -67,22 +67,6 @@ const PushNotification: React.FC<PushNotificationProps> = ({ notification, onClo
               <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-500/10 px-2 py-1 rounded-lg">Y ALLER</span>
             </div>
           )}
-          {notification.action === 'open_navigation' && (
-            <div className="mt-2 flex items-center gap-2">
-              <button 
-                onClick={(e) => { e.stopPropagation(); onAction?.('open_navigation'); }}
-                className="text-[9px] font-black uppercase tracking-widest text-sky-500 bg-sky-500/10 px-2 py-1 rounded-lg"
-              >
-                Waze
-              </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); onAction?.('open_navigation'); }}
-                className="text-[9px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-lg"
-              >
-                Maps
-              </button>
-            </div>
-          )}
         </div>
         <button onClick={handleClose} className="p-1 opacity-40 hover:opacity-100 transition-opacity">
           <X size={16} />

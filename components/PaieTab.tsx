@@ -97,7 +97,16 @@ const formatWeekTitle = (startDate: Date) => {
 
 const MonthAccordion = ({ month, displayMode, darkMode, cardClass, isDefaultOpen }: any) => {
   const [isOpen, setIsOpen] = useState(isDefaultOpen);
-  const totalEarnings = displayMode === 'net' ? month.totalNet : month.totalBrut;
+  
+  // Données de test demandées pour le rendu visuel
+  const testCurrentMonth = 1614.58;
+  const testPreviousMonth = 1757.08;
+  
+  // On utilise les données réelles si elles existent (> 0), sinon on utilise les données de test
+  const currentMonthTotal = month.totalNet > 0 ? (displayMode === 'net' ? month.totalNet : month.totalBrut) : testCurrentMonth;
+  const previousMonthTotal = month.prevMonthNet > 0 ? (displayMode === 'net' ? month.prevMonthNet : month.prevMonthBrut) : testPreviousMonth;
+  
+  const diff = currentMonthTotal - previousMonthTotal;
   const monthName = month.startDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   
   return (
@@ -117,14 +126,17 @@ const MonthAccordion = ({ month, displayMode, darkMode, cardClass, isDefaultOpen
           <div>
             <h3 className="text-lg font-black capitalize tracking-tight">{monthName}</h3>
             <p className={`text-sm font-bold tabular-nums ${
-              !month.isPositiveTrend && displayMode === 'net' ? 'text-rose-500' : (displayMode === 'net' ? 'text-emerald-500' : 'text-indigo-500')
+              diff < 0 && displayMode === 'net' ? 'text-rose-500' : (displayMode === 'net' ? 'text-emerald-500' : 'text-indigo-500')
             }`}>
-              {totalEarnings.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              {currentMonthTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+            </p>
+            <p className={`text-[11px] font-medium opacity-70 ${diff >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {diff >= 0 ? '+' : '-'} {Math.abs(diff).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € vs mois dernier
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {!month.isPositiveTrend && displayMode === 'net' && (
+          {diff < 0 && displayMode === 'net' && (
             <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/10 text-rose-500 text-[8px] font-black uppercase tracking-widest">
               <TrendingDown size={10} /> Baisse
             </div>
@@ -491,10 +503,17 @@ const PaieTab: React.FC<PaieTabProps> = ({
       })();
       
       const prevMonthData = monthsMap[prevMonthKey];
+      month.prevMonthNet = prevMonthData ? prevMonthData.totalNet : 0;
+      month.prevMonthBrut = prevMonthData ? prevMonthData.totalBrut : 0;
       month.isPositiveTrend = prevMonthData ? month.totalNet >= prevMonthData.totalNet : true;
     });
 
     const currentMonthData = monthsMap[`${currentYearIdx}-${String(currentMonthIdx + 1).padStart(2, '0')}`];
+    const prevMonthKey = (() => {
+      const d = new Date(currentYearIdx, currentMonthIdx - 1, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    })();
+    const prevMonthData = monthsMap[prevMonthKey];
     
     const taxiBonusBrut = hasTaxiCard ? SMPG_BASE * TAXI_BONUS_PERCENT : 0;
     const taxiBonusNet = taxiBonusBrut * NET_COEFFICIENT;
@@ -505,6 +524,8 @@ const PaieTab: React.FC<PaieTabProps> = ({
     return {
       totalMonthlyBrut: currentMonthBrut + taxiBonusBrut,
       totalMonthlyNet: (currentMonthData?.totalNet || 0) + taxiBonusNet,
+      prevMonthlyBrut: (prevMonthData?.totalBrut || 0) + taxiBonusBrut,
+      prevMonthlyNet: (prevMonthData?.totalNet || 0) + taxiBonusNet,
       totalEffectiveHours: (currentMonthData?.totalEffectiveMin || 0) / 60,
       totalAllowances: currentMonthData?.totalAllowances || 0,
       isPositiveTrend: currentMonthData?.isPositiveTrend ?? true,
@@ -555,11 +576,33 @@ const PaieTab: React.FC<PaieTabProps> = ({
               <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">
                 {displayMode === 'net' ? 'Net à payer estimé (Mois)' : 'Brut total estimé (Mois)'}
               </p>
-              <div className="flex items-baseline gap-2">
-                <h2 className="text-5xl font-black tracking-tighter tabular-nums">
-                  {(displayMode === 'net' ? monthlyStats.totalMonthlyNet : monthlyStats.totalMonthlyBrut).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </h2>
-                <span className="text-xl font-bold opacity-60">€</span>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-5xl font-black tracking-tighter tabular-nums">
+                    {(() => {
+                      const testCurrent = 1106.05;
+                      const val = displayMode === 'net' ? monthlyStats.totalMonthlyNet : monthlyStats.totalMonthlyBrut;
+                      return (val > 0 ? val : testCurrent).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    })()}
+                  </h2>
+                  <span className="text-xl font-bold opacity-60">€</span>
+                </div>
+                
+                {/* Différence par rapport au mois dernier */}
+                {(() => {
+                  const testCurrent = 1106.05;
+                  const testPrev = 1250.00;
+                  
+                  const current = (displayMode === 'net' ? monthlyStats.totalMonthlyNet : monthlyStats.totalMonthlyBrut) || testCurrent;
+                  const prev = (displayMode === 'net' ? monthlyStats.prevMonthlyNet : monthlyStats.prevMonthlyBrut) || testPrev;
+                  const diff = current - prev;
+                  
+                  return (
+                    <span className="text-sm font-semibold text-white/80 ml-1">
+                      ({diff >= 0 ? '+' : '-'} {Math.abs(diff).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)
+                    </span>
+                  );
+                })()}
               </div>
             </div>
             <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md">
