@@ -98,13 +98,8 @@ const formatWeekTitle = (startDate: Date) => {
 const MonthAccordion = ({ month, displayMode, darkMode, cardClass, isDefaultOpen }: any) => {
   const [isOpen, setIsOpen] = useState(isDefaultOpen);
   
-  // Données de test demandées pour le rendu visuel
-  const testCurrentMonth = 1614.58;
-  const testPreviousMonth = 1757.08;
-  
-  // On utilise les données réelles si elles existent (> 0), sinon on utilise les données de test
-  const currentMonthTotal = month.totalNet > 0 ? (displayMode === 'net' ? month.totalNet : month.totalBrut) : testCurrentMonth;
-  const previousMonthTotal = month.prevMonthNet > 0 ? (displayMode === 'net' ? month.prevMonthNet : month.prevMonthBrut) : testPreviousMonth;
+  const currentMonthTotal = displayMode === 'net' ? month.totalNet : month.totalBrut;
+  const previousMonthTotal = displayMode === 'net' ? month.prevMonthNet : month.prevMonthBrut;
   
   const diff = currentMonthTotal - previousMonthTotal;
   const monthName = month.startDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
@@ -130,9 +125,11 @@ const MonthAccordion = ({ month, displayMode, darkMode, cardClass, isDefaultOpen
             }`}>
               {currentMonthTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
             </p>
-            <p className={`text-[11px] font-medium opacity-70 ${diff >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {diff >= 0 ? '+' : '-'} {Math.abs(diff).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € vs mois dernier
-            </p>
+            {previousMonthTotal > 0 && (
+              <p className={`text-[11px] font-medium opacity-70 ${diff >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {diff >= 0 ? '+' : '-'} {Math.abs(diff).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € vs mois dernier
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -579,24 +576,19 @@ const PaieTab: React.FC<PaieTabProps> = ({
               <div className="flex items-baseline gap-2 flex-wrap">
                 <div className="flex items-baseline gap-2">
                   <h2 className="text-5xl font-black tracking-tighter tabular-nums">
-                    {(() => {
-                      const testCurrent = 1106.05;
-                      const val = displayMode === 'net' ? monthlyStats.totalMonthlyNet : monthlyStats.totalMonthlyBrut;
-                      return (val > 0 ? val : testCurrent).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    })()}
+                    {(displayMode === 'net' ? monthlyStats.totalMonthlyNet : monthlyStats.totalMonthlyBrut).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </h2>
                   <span className="text-xl font-bold opacity-60">€</span>
                 </div>
                 
                 {/* Différence par rapport au mois dernier */}
                 {(() => {
-                  const testCurrent = 1106.05;
-                  const testPrev = 1250.00;
-                  
-                  const current = (displayMode === 'net' ? monthlyStats.totalMonthlyNet : monthlyStats.totalMonthlyBrut) || testCurrent;
-                  const prev = (displayMode === 'net' ? monthlyStats.prevMonthlyNet : monthlyStats.prevMonthlyBrut) || testPrev;
+                  const current = displayMode === 'net' ? monthlyStats.totalMonthlyNet : monthlyStats.totalMonthlyBrut;
+                  const prev = displayMode === 'net' ? monthlyStats.prevMonthlyNet : monthlyStats.prevMonthlyBrut;
                   const diff = current - prev;
                   
+                  if (prev <= 0) return null;
+
                   return (
                     <span className="text-sm font-semibold text-white/80 ml-1">
                       ({diff >= 0 ? '+' : '-'} {Math.abs(diff).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)
