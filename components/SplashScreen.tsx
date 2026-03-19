@@ -13,7 +13,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
   const loadingMessages = [
     "Récupération de la feuille de route...",
     "Calcul des indemnités d'ancienneté (IDCC 16)...",
-    "Localisation des boulangeries à proximité...",
+    "Analyse des temps de pause...",
     "Optimisation de votre planning..."
   ];
 
@@ -35,62 +35,76 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
       }
 
       setProgress(currentProgress);
-      setMessageIndex(Math.min(Math.floor((currentProgress / 100) * loadingMessages.length), loadingMessages.length - 1));
+      
+      const nextMessageIndex = Math.min(
+        Math.floor((currentProgress / 100) * loadingMessages.length), 
+        loadingMessages.length - 1
+      );
+      setMessageIndex(nextMessageIndex);
 
       if (currentProgress < 100) {
         requestAnimationFrame(updateProgress);
       } else {
+        setIsReady(true);
         setTimeout(() => {
-          setIsReady(true);
-          setTimeout(onComplete, 800);
-        }, 200);
+          onComplete();
+        }, 800);
       }
     };
 
     requestAnimationFrame(updateProgress);
   }, [onComplete]);
 
+  // Génération d'un timestamp pour forcer le rafraîchissement de l'image sur smartphone
+  const cacheBuster = useMemo(() => new Date().getTime(), []);
+
   return (
-    // Suppression du dégradé bleu -> Utilisation du noir profond #0B0E14
-    <div className="fixed inset-0 z-[100] bg-[#0B0E14] flex flex-col items-center justify-center overflow-hidden">
-      
-      {/* Conteneur Logo Central */}
-      <div className="relative flex flex-col items-center">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="relative z-10 mb-8"
+    <div className="fixed inset-0 z-[999] bg-slate-950 flex flex-col items-center justify-center overflow-hidden">
+      {/* Effets de lumière en arrière-plan */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-64 h-64 bg-indigo-600/20 blur-[100px] rounded-full animate-pulse" />
+      <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-48 h-48 bg-violet-600/10 blur-[80px] rounded-full" />
+
+      <div className="relative z-10 flex flex-col items-center gap-12 w-full max-w-sm">
+        
+        {/* LOGO AMBUFLOW PRO - REMPLACE L'ANCIENNE ICÔNE */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="relative"
         >
-          {/* Appel direct à l'image dans le dossier public */}
+          {/* Halo lumineux derrière l'image */}
+          <div className="absolute inset-0 bg-indigo-500 blur-[50px] opacity-20 scale-150 animate-pulse" />
+          
           <img 
-            src="/pwa-512x512.png" 
-            alt="AmbuFlow Logo" 
-            className="w-32 h-32 object-contain animate-pulse shadow-2xl rounded-3xl"
+            src={`https://ambuflow-delta.vercel.app/pwa-512x512.png?t=${cacheBuster}`}
+            alt="AmbuFlow Pro"
+            className="relative w-56 h-auto drop-shadow-[0_0_30px_rgba(79,70,229,0.4)]"
+            priority="true"
           />
         </motion.div>
 
-        {/* Barre de progression harmonisée */}
-        <div className="w-48 h-1.5 bg-white/10 rounded-full overflow-hidden mb-6">
+        {/* Barre de progression stylisée */}
+        <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden relative border border-white/5">
           <motion.div 
-            className="h-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
+            className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 via-violet-500 to-emerald-400 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.1 }}
           />
         </div>
 
-        {/* Messages de chargement */}
-        <div className="h-10 text-center px-6">
+        {/* Messages de chargement dynamiques */}
+        <div className="h-12 text-center px-8">
           <AnimatePresence mode="wait">
             {isReady ? (
               <motion.p
                 key="ready"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="text-white font-black text-sm tracking-tight uppercase"
+                className="text-emerald-400 font-black text-xs tracking-[0.2em] uppercase"
               >
-                Prêt !
+                Prêt à rouler
               </motion.p>
             ) : (
               <motion.div
@@ -100,10 +114,10 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-1"
               >
-                <p className="text-white font-bold text-[13px]">
-                  AmbuFlow
+                <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest">
+                  Initialisation
                 </p>
-                <p className="text-white/40 text-[10px] font-medium italic">
+                <p className="text-white text-[11px] font-medium italic opacity-80">
                   {loadingMessages[messageIndex]}
                 </p>
               </motion.div>
@@ -112,14 +126,20 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
         </div>
       </div>
 
-      {/* Footer Powered By */}
+      {/* Footer discret */}
       <div className="absolute bottom-12 flex items-center gap-2 opacity-20">
         <p className="text-[9px] font-black text-white uppercase tracking-[0.2em]">
-          Powered by Gemini AI
+          Version 2.0 • AmbuFlow Pro
         </p>
       </div>
     </div>
   );
 };
+
+// Petit utilitaire useMemo pour le timestamp unique
+function useMemo<T>(factory: () => T, deps: any[]): T {
+  const [val] = React.useState(factory);
+  return val;
+}
 
 export default SplashScreen;
