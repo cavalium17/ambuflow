@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Clock, 
   Play, 
@@ -27,6 +28,13 @@ interface BoardTabProps {
   userStats: UserStats;
   hourlyRate: string;
   onOpenAssistant: () => void;
+  modulationInfo?: {
+    weekInCycle: number;
+    totalWeeks: number;
+    daysRemaining: number;
+    totalHours: number;
+    progress: number;
+  } | null;
 }
 
 const BoardTab: React.FC<BoardTabProps> = ({
@@ -41,7 +49,8 @@ const BoardTab: React.FC<BoardTabProps> = ({
   logs,
   userStats,
   hourlyRate,
-  onOpenAssistant
+  onOpenAssistant,
+  modulationInfo
 }) => {
   const today = new Date().toISOString().split('T')[0];
   
@@ -99,6 +108,36 @@ const BoardTab: React.FC<BoardTabProps> = ({
 
       {/* Main Status Card */}
       <div className={bentoClass(status !== ServiceStatus.OFF) + " p-8"}>
+        {modulationInfo && (
+          <div className="mb-6 space-y-3">
+            <div className="flex justify-between items-end">
+              <div>
+                <p className={`text-[10px] font-black uppercase tracking-widest ${status !== ServiceStatus.OFF ? 'text-indigo-200' : 'text-slate-400'}`}>
+                  Cycle : Semaine {modulationInfo.weekInCycle}/{modulationInfo.totalWeeks}
+                </p>
+                <p className={`text-xs font-bold ${status !== ServiceStatus.OFF ? 'text-white' : (darkMode ? 'text-white' : 'text-slate-900')}`}>
+                  {modulationInfo.daysRemaining} jours avant clôture
+                </p>
+              </div>
+              <div className="text-right">
+                <p className={`text-[10px] font-black uppercase tracking-widest ${status !== ServiceStatus.OFF ? 'text-indigo-200' : 'text-slate-400'}`}>
+                  Total Cycle
+                </p>
+                <p className={`text-xs font-bold ${status !== ServiceStatus.OFF ? 'text-white' : (darkMode ? 'text-white' : 'text-slate-900')}`}>
+                  {modulationInfo.totalHours.toFixed(1)}h
+                </p>
+              </div>
+            </div>
+            <div className={`h-1.5 w-full rounded-full overflow-hidden ${status !== ServiceStatus.OFF ? 'bg-white/20' : 'bg-slate-100'}`}>
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${modulationInfo.progress}%` }}
+                className={`h-full rounded-full ${status !== ServiceStatus.OFF ? 'bg-white' : 'bg-indigo-600'}`}
+              />
+            </div>
+          </div>
+        )}
+        
         <div className="flex flex-col items-center text-center space-y-6">
           <div className={`w-20 h-20 rounded-[28px] flex items-center justify-center shadow-2xl ${
             status === ServiceStatus.WORKING ? 'bg-white text-indigo-600 animate-pulse' : 

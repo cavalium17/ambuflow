@@ -24,7 +24,8 @@ import {
   ArrowLeft,
   Calendar,
   Plane,
-  AlertTriangle
+  AlertTriangle,
+  Zap
 } from 'lucide-react';
 import { Shift, Break, ServiceStatus, AppTab } from '../types';
 
@@ -49,6 +50,13 @@ interface PlanningTabProps {
   leaveBalances: { cp: number };
   initialCpBalance: number;
   setInitialCpBalance: (val: number) => void;
+  modulationInfo?: {
+    weekInCycle: number;
+    totalWeeks: number;
+    daysRemaining: number;
+    totalHours: number;
+    progress: number;
+  } | null;
 }
 
 type ViewType = 'week' | 'month';
@@ -71,7 +79,8 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   modulationStartDate,
   leaveBalances,
   initialCpBalance,
-  setInitialCpBalance
+  setInitialCpBalance,
+  modulationInfo
 }) => {
   const [viewType, setViewType] = useState<ViewType>('week');
   const [pivotDate, setPivotDate] = useState(new Date(appCurrentTime));
@@ -519,6 +528,34 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
           </button>
         ))}
       </div>
+
+      {workRegime === 'modulation' && modulationInfo && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-4 rounded-[32px] border flex items-center justify-between shadow-xl ${
+            darkMode ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+              <Zap size={20} fill="currentColor" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                {modulationInfo.weekInCycle === 1 ? 'Début de cycle' : `Semaine ${modulationInfo.weekInCycle} - Modulation`}
+              </p>
+              <p className={`text-xs font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                Cycle de {modulationInfo.totalWeeks} semaines
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Clôture dans</p>
+            <p className="text-sm font-black text-indigo-500 tabular-nums">{modulationInfo.daysRemaining} jours</p>
+          </div>
+        </motion.div>
+      )}
 
       <div className="flex justify-between items-center px-1">
           <div className="flex items-center gap-4">

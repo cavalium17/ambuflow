@@ -52,6 +52,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     taxiDate: '',
     companyName: '',
     contractStartDate: '',
+    modulationStartDate: '',
     hourlyRate: '12.79',
     workRegime: 'weekly',
     modulationWeeks: '4',
@@ -70,6 +71,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       }
     }
     // All other steps are now non-blocking as requested
+
+    if (currentStep === 4) {
+      if (formData.workRegime === 'modulation' && !formData.modulationStartDate) {
+        setValidationError("Veuillez sélectionner une date de début de cycle pour la modulation.");
+        return;
+      }
+    }
 
     if (currentStep < steps.length) {
       setCurrentStep(prev => prev + 1);
@@ -125,6 +133,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         taxiDate: formData.taxiDate,
         companyName: formData.companyName,
         contractStartDate: formData.contractStartDate,
+        modulationStartDate: formData.modulationStartDate,
         hourlyRate: formData.hourlyRate,
         workRegime: formData.workRegime,
         modulationWeeks: formData.modulationWeeks,
@@ -423,6 +432,27 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block text-center">
+                      Date de début du cycle de modulation
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500/50 group-focus-within:text-indigo-500 transition-colors">
+                        <Calendar size={20} />
+                      </div>
+                      <input 
+                        type="date"
+                        required
+                        value={formData.modulationStartDate}
+                        onChange={e => setFormData(prev => ({ ...prev, modulationStartDate: e.target.value }))}
+                        className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 pl-12 text-white font-bold outline-none focus:border-indigo-500 transition-all [color-scheme:dark]"
+                      />
+                    </div>
+                    <p className="text-[9px] text-slate-500 font-medium text-center italic">
+                      Cette date permet de calculer vos cycles de {formData.modulationWeeks} semaines automatiquement.
+                    </p>
                   </div>
                 </div>
               </div>

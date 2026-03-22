@@ -315,6 +315,7 @@ const App: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [nextAutoStart, setNextAutoStart] = useState<Date | null>(null);
   const [prefersDarkMode, setPrefersDarkMode] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
 
   const addNotification = useCallback((title: string, message: string, type: 'info' | 'success' | 'warning') => {
     const newNotif: PushType = {
@@ -897,6 +898,14 @@ const App: React.FC = () => {
     setActiveTab('home'); // Redirection vers le Board
   }, [breakStartTime, breakDuration, breakLocation, breakType, currentTime, activeShiftId, addLog, status]);
 
+  const handleToggleBreak = useCallback(() => {
+    if (status === ServiceStatus.WORKING) {
+      handleOpenBreakModal('meal');
+    } else if (status === ServiceStatus.BREAK) {
+      handleResume();
+    }
+  }, [status, handleOpenBreakModal, handleResume]);
+
   const handleLogout = useCallback(async () => {
     try {
       await auth.signOut();
@@ -1149,6 +1158,63 @@ const App: React.FC = () => {
     return Math.max(0, eff);
   }, [activeShiftId, currentTime]);
 
+  const getCurrentModulationCycle = useCallback((startDateStr: string, weeksStr: string) => {
+    if (!startDateStr || !weeksStr) return null;
+    
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    
+    const weeks = parseInt(weeksStr);
+    const now = new Date(currentTime);
+    now.setHours(0, 0, 0, 0);
+    
+    const diffTime = now.getTime() - startDate.getTime();
+    if (diffTime < 0) return null;
+    
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const totalWeeksElapsed = Math.floor(diffDays / 7);
+    
+    const currentCycleIndex = Math.floor(totalWeeksElapsed / weeks);
+    const weekInCycle = (totalWeeksElapsed % weeks) + 1;
+    
+    const cycleStartDate = new Date(startDate);
+    cycleStartDate.setDate(startDate.getDate() + (currentCycleIndex * weeks * 7));
+    
+    const cycleEndDate = new Date(cycleStartDate);
+    cycleEndDate.setDate(cycleStartDate.getDate() + (weeks * 7) - 1);
+    cycleEndDate.setHours(23, 59, 59, 999);
+    
+    const daysRemaining = Math.ceil((cycleEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    const cycleShifts = shifts.filter(s => {
+      const shiftDate = new Date(s.day);
+      return shiftDate >= cycleStartDate && shiftDate <= cycleEndDate && s.end !== '--:--';
+    });
+    
+    let totalMinutes = 0;
+    cycleShifts.forEach(s => {
+      totalMinutes += calculateEffectiveMinutes(s);
+    });
+    
+    const totalHours = totalMinutes / 60;
+    const progress = (totalWeeksElapsed % weeks + (diffDays % 7) / 7) / weeks * 100;
+
+    return {
+      weekInCycle,
+      totalWeeks: weeks,
+      cycleEndDate,
+      daysRemaining,
+      totalHours,
+      progress,
+      cycleStartDate
+    };
+  }, [currentTime, shifts, calculateEffectiveMinutes]);
+
+  const modulationInfo = useMemo(() => {
+    if (workRegime !== 'modulation' || !modulationStartDate) return null;
+    return getCurrentModulationCycle(modulationStartDate, modulationWeeks);
+  }, [workRegime, modulationStartDate, modulationWeeks, getCurrentModulationCycle]);
+
   const periodStats = useMemo(() => {
     let totalMin = 0;
     let targetMin = (parseInt(hoursBase) || 35) * 60;
@@ -1187,31 +1253,22 @@ const App: React.FC = () => {
       icon = Layers;
       color = "violet";
       targetMin = (parseInt(hoursBase) || 35) * 2 * 60;
-    } else if (workRegime === 'modulation') {
-      const start = modulationStartDate ? new Date(modulationStartDate) : new Date();
-      const weeks = parseInt(modulationWeeks) || 4;
-      const end = new Date(start);
-      end.setDate(start.getDate() + (weeks * 7));
-      shifts.forEach(s => {
-        const d = new Date(s.day);
-        if (d >= start && d <= end) totalMin += calculateEffectiveMinutes(s);
-      });
-      targetMin = (parseInt(hoursBase) || 35) * weeks * 60;
+    } else if (workRegime === 'modulation' && modulationInfo) {
+      targetMin = (parseInt(hoursBase) || 35) * modulationInfo.totalWeeks * 60;
+      totalMin = modulationInfo.totalHours * 60;
       const remainingMin = Math.max(0, targetMin - totalMin);
-      const timeRemainingMs = end.getTime() - currentTime.getTime();
-      const daysLeft = Math.floor(timeRemainingMs / (1000 * 60 * 60 * 24));
-      const hoursLeft = Math.floor((timeRemainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      
       extraData = {
         targetHours: targetMin / 60,
         performedHours: Math.floor(totalMin / 60),
-        performedMins: totalMin % 60,
+        performedMins: Math.round(totalMin % 60),
         remainingHours: Math.floor(remainingMin / 60),
-        remainingMins: remainingMin % 60,
-        countdown: `${daysLeft}j ${hoursLeft}h`,
+        remainingMins: Math.round(remainingMin % 60),
+        countdown: `${modulationInfo.daysRemaining}j`,
         progress: Math.min(100, (totalMin / targetMin) * 100)
       };
       title = "Modulation";
-      subtitle = `${weeks} semaines`;
+      subtitle = `Semaine ${modulationInfo.weekInCycle}/${modulationInfo.totalWeeks}`;
       icon = RefreshCw;
       color = "emerald";
     } else if (workRegime === 'annualization') {
@@ -1227,10 +1284,10 @@ const App: React.FC = () => {
       targetMin = 1607 * 60;
     }
     const h = Math.floor(totalMin / 60);
-    const m = totalMin % 60;
+    const m = Math.round(totalMin % 60);
     const progress = Math.min(100, (totalMin / targetMin) * 100);
     return { title, subtitle, icon, value: `${h}h ${m}m`, color, extraData, progress };
-  }, [shifts, workRegime, calculateEffectiveMinutes, currentTime, contractStartDate, modulationStartDate, modulationWeeks, hoursBase]);
+  }, [shifts, workRegime, calculateEffectiveMinutes, currentTime, contractStartDate, modulationStartDate, modulationWeeks, hoursBase, modulationInfo]);
 
   const todayStats = useMemo(() => {
     const todayStr = getLocalDateString(currentTime);
@@ -2158,8 +2215,25 @@ const App: React.FC = () => {
               );
             })()}
             <main className="flex-1 max-w-xl mx-auto w-full">
-              {activeTab === 'home' && renderHome()}
-              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} onUpdateShifts={handleUpdateShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}
+              {activeTab === 'home' && (
+                <BoardTab 
+                  darkMode={effectiveDarkMode}
+                  userName={userName}
+                  status={status}
+                  setStatus={setStatus}
+                  activeShift={shifts.find(s => s.id === activeShiftId) || null}
+                  onStartService={() => handleStartService()}
+                  onEndService={handleEndService}
+                  onToggleBreak={handleToggleBreak}
+                  shifts={shifts}
+                  logs={logs}
+                  userStats={userStats}
+                  hourlyRate={effectiveHourlyRate}
+                  onOpenAssistant={() => setShowAssistant(true)}
+                  modulationInfo={modulationInfo}
+                />
+              )}
+              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} onUpdateShifts={handleUpdateShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} modulationInfo={modulationInfo} />}
               {activeTab === 'paie' && <PaieTab darkMode={effectiveDarkMode} hasTaxiCard={hasTaxiCard} hourlyRate={effectiveHourlyRate} hoursBase={hoursBase} workRegime={workRegime} shifts={shifts} cpCalculationMode={cpCalculationMode as '25' | '30'} />}
               {activeTab === 'profile' && <ProfileTab 
                 darkMode={effectiveDarkMode} 
