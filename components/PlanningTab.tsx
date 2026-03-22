@@ -36,7 +36,7 @@ interface PlanningTabProps {
   onEndServiceSilently?: () => void;
   appCurrentTime: Date;
   shifts: Shift[];
-  setShifts: React.Dispatch<React.SetStateAction<Shift[]>>;
+  onUpdateShifts: (shifts: Shift[]) => void;
   activeShiftId: string | null;
   setActiveShiftId: React.Dispatch<React.SetStateAction<string | null>>;
   availableVehicles: string[];
@@ -61,7 +61,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   onEndServiceSilently,
   appCurrentTime,
   shifts,
-  setShifts,
+  onUpdateShifts,
   activeShiftId,
   setActiveShiftId,
   availableVehicles,
@@ -286,15 +286,15 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   }, []);
 
   const handleDeleteShift = useCallback((id: string) => {
-    setShifts(prev => prev.filter(s => s.id !== id));
+    onUpdateShifts(shifts.filter(s => s.id !== id));
     if (id === activeShiftId) onEndServiceSilently?.();
-  }, [setShifts, activeShiftId, onEndServiceSilently]);
+  }, [onUpdateShifts, shifts, activeShiftId, onEndServiceSilently]);
 
   const handleUpdateShift = useCallback((updatedShift: Shift) => {
     if (updatedShift.id === activeShiftId && updatedShift.end !== '--:--') onEndServiceSilently?.();
-    setShifts(prev => prev.map(s => s.id === updatedShift.id ? updatedShift : s));
+    onUpdateShifts(shifts.map(s => s.id === updatedShift.id ? updatedShift : s));
     setShowEditModal(false);
-  }, [activeShiftId, onEndServiceSilently, setShifts]);
+  }, [activeShiftId, onEndServiceSilently, onUpdateShifts, shifts]);
 
   const validateShift = () => {
     if (!newShift.day || !newShift.start) return;
@@ -311,7 +311,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
       breaks: newShift.breaks 
     };
 
-    setShifts(prev => [shiftData, ...prev]);
+    onUpdateShifts([shiftData, ...shifts]);
     if (!isPast && onAutoStartService) onAutoStartService(shiftId, shiftData.start, shiftData.day);
     setShowAddModal(false);
     setAddFlowStep('choice');
@@ -360,7 +360,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
 
     // On ajoute les shifts. Le useMemo dans App.tsx s'occupera de mettre à jour le solde
     // car il compte le nombre de shifts de type congé.
-    setShifts(prev => [...newShifts, ...prev]);
+    onUpdateShifts([...newShifts, ...shifts]);
     setShowAddModal(false);
     setAddFlowStep('choice');
     setNewLeave({ day: todayStr, endDate: todayStr, type: 'CP' });

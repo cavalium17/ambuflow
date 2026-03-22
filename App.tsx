@@ -470,6 +470,8 @@ const App: React.FC = () => {
       pushEnabled,
       followSystemTheme,
       onboarded,
+      shifts,
+      logs,
       updatedAt: new Date().toISOString()
     };
     
@@ -491,7 +493,34 @@ const App: React.FC = () => {
     } finally {
       isSavingRef.current = false;
     }
-  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, pushEnabled, followSystemTheme, onboarded]);
+  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, pushEnabled, followSystemTheme, onboarded, shifts, logs]);
+
+  const nextMission = useMemo(() => {
+    const now = currentTime;
+    const todayStr = getLocalDateString(now);
+    
+    // Find upcoming shifts (today or future) that haven't started yet
+    const upcoming = shifts
+      .filter(s => !s.isLeave && s.start !== '--:--' && s.end === '--:--')
+      .filter(s => {
+        const [h, m] = s.start.split(':').map(Number);
+        const shiftDate = new Date(s.day);
+        shiftDate.setHours(h, m, 0, 0);
+        return shiftDate > now;
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.day + 'T' + a.start);
+        const dateB = new Date(b.day + 'T' + b.start);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+    return upcoming[0] || null;
+  }, [shifts, currentTime]);
+
+  const todayPlannedShift = useMemo(() => {
+    const todayStr = getLocalDateString(currentTime);
+    return shifts.find(s => s.day === todayStr && !s.isLeave && s.start !== '--:--' && s.end === '--:--' && s.id !== activeShiftId);
+  }, [shifts, currentTime, activeShiftId]);
 
   useEffect(() => {
     if (user) {
@@ -500,7 +529,7 @@ const App: React.FC = () => {
       }, 1000); // Debounce saves by 1 second
       return () => clearTimeout(timeout);
     }
-  }, [user, saveConfig]);
+  }, [user, saveConfig, shifts, logs]);
 
   // Permissions et Notifications
   useEffect(() => {
@@ -1443,12 +1472,16 @@ const App: React.FC = () => {
     return `${days > 0 ? `J-${days} ` : ''}${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleUpdateShifts = useCallback((newShifts: Shift[]) => {
+    setShifts(newShifts);
+  }, []);
+
   const renderHome = () => {
     const bentoCardBase = `relative overflow-hidden transition-all duration-500 rounded-[32px] border ${effectiveDarkMode ? 'bg-slate-900/60 border-white/5 shadow-2xl shadow-black/40' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/40'} backdrop-blur-xl`;
     const nextCountdown = getNextShiftCountdown();
     const todayStr = getLocalDateString(currentTime);
-    const todayShift = shifts.find(s => s.day === todayStr);
-    const isTodayFinished = todayShift && todayShift.end !== '--:--';
+    const todayShift = shifts.find(s => s.day === todayStr && s.end !== '--:--');
+    const isTodayFinished = !!todayShift;
     const PeriodIcon = periodStats.icon;
     
     const isBreakActive = status === ServiceStatus.BREAK && (!breakStartDateTime || currentTime >= breakStartDateTime);
@@ -1483,6 +1516,45 @@ const App: React.FC = () => {
 
     return (
       <div className="p-5 space-y-5 animate-fadeIn pb-32">
+        {/* Prochaine Mission / Mission du jour */}
+        {status === ServiceStatus.OFF && !isTodayFinished && todayPlannedShift && (
+          <div className={`p-6 rounded-[32px] border animate-slideUp flex flex-col gap-4 ${effectiveDarkMode ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500 text-white">
+                  <Calendar size={18} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Mission prévue aujourd'hui</p>
+                  <p className="text-sm font-black">{todayPlannedShift.start} — {todayPlannedShift.vehicle} ({todayPlannedShift.crew})</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => handleStartService(todayPlannedShift.id)}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+              >
+                Démarrer
+              </button>
+            </div>
+          </div>
+        )}
+
+        {status === ServiceStatus.OFF && !todayPlannedShift && nextMission && (
+          <div className={`p-6 rounded-[32px] border animate-slideUp flex items-center gap-4 ${effectiveDarkMode ? 'bg-slate-900/40 border-white/5' : 'bg-slate-50 border-slate-100'}`}>
+            <div className="p-2.5 rounded-xl bg-slate-500/10 text-slate-400">
+              <Clock size={18} />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prochaine mission</p>
+              <p className="text-sm font-black">
+                {new Date(nextMission.day).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })} à {nextMission.start}
+              </p>
+            </div>
+            <button onClick={() => setActiveTab('planning')} className="p-2 text-slate-400 hover:text-indigo-500 transition-colors">
+              <ChevronRight size={20} />
+            </button>
+          </div>
+        )}
         {afgsuStatus && afgsuStatus !== 'valid' && (
           <div className={`p-4 rounded-[24px] border flex items-center gap-4 animate-slideUp ${
             afgsuStatus === 'expired' 
@@ -2087,8 +2159,8 @@ const App: React.FC = () => {
             })()}
             <main className="flex-1 max-w-xl mx-auto w-full">
               {activeTab === 'home' && renderHome()}
-              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} setShifts={setShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}
-              {activeTab === 'paie' && <PaieTab logs={logs} darkMode={effectiveDarkMode} hasTaxiCard={hasTaxiCard} hourlyRate={effectiveHourlyRate} hoursBase={hoursBase} workRegime={workRegime} shifts={shifts} cpCalculationMode={cpCalculationMode as '25' | '30'} />}
+              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} onUpdateShifts={handleUpdateShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}
+              {activeTab === 'paie' && <PaieTab darkMode={effectiveDarkMode} hasTaxiCard={hasTaxiCard} hourlyRate={effectiveHourlyRate} hoursBase={hoursBase} workRegime={workRegime} shifts={shifts} cpCalculationMode={cpCalculationMode as '25' | '30'} />}
               {activeTab === 'profile' && <ProfileTab 
                 darkMode={effectiveDarkMode} 
                 userName={userName} 
