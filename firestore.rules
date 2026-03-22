@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "adrien.brunelliere@gmail.com" && request.auth.token.email_verified == true));
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return hasOnlyAllowedFields([
+        'userName', 'firstName', 'lastName', 'jobTitle', 'contractType', 
+        'hoursBase', 'contractStartDate', 'autoGeo', 'onboarded', 
+        'shifts', 'logs', 'role', 'qualifications', 'entryDate', 'workRegime',
+        'monthlyHours', 'leaveCalculation',
+        'updatedAt', 'hasDea', 'hasAux', 'hasTaxiCard', 'profileImage',
+        'hourlyRate', 'companyName', 'companyCity', 'primaryGraduationDate', 'deaDate',
+        'auxDate', 'taxiDate', 'taxiCardExpiryDate', 'taxiFpcDate',
+        'afgsuDate', 'medicalExpiryDate', 'cpCalculationMode',
+        'modulationStartDate', 'modulationWeeks', 'initialCpBalance',
+        'pushEnabled', 'followSystemTheme', 'customHours',
+        'email', 'createdAt'
+      ]) &&
+      (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
+      (!('onboarded' in data) || (data.onboarded is bool));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId);
+    }
+
+    match /shifts/{shiftId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

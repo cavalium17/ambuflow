@@ -290,7 +290,7 @@ interface PaieTabProps {
   hasTaxiCard?: boolean;
   hourlyRate: string;
   hoursBase: string;
-  overtimeMode: string;
+  workRegime: string;
   shifts: Shift[];
   cpCalculationMode?: '25' | '30';
 }
@@ -300,7 +300,7 @@ const PaieTab: React.FC<PaieTabProps> = ({
   hasTaxiCard = false, 
   hourlyRate, 
   hoursBase, 
-  overtimeMode, 
+  workRegime, 
   shifts,
   cpCalculationMode = '25'
 }) => {

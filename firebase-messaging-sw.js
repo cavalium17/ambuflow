@@ -6,13 +6,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 // Initialisation de Firebase dans le Service Worker
 // Utilisez les mêmes valeurs que dans votre firebaseConfig.ts
 firebase.initializeApp({
-  apiKey: "AIzaSyA_kth_5Ykhm7X1zlc1TWuPoOZRx2RqZtc",
-  authDomain: "ambuflow-e5ffc.firebaseapp.com",
   projectId: "ambuflow-e5ffc",
-  storageBucket: "ambuflow-e5ffc.firebasestorage.app",
+  appId: "1:296039792412:web:4b9bddd562b72d62bac4d9",
+  apiKey: "AIzaSyAdLD-MxaEObu8L8MDYwPLSg10nIMA4fVI",
+  authDomain: "ambuflow-e5ffc.firebaseapp.com",
   messagingSenderId: "296039792412",
-  appId: "1:296039792412:web:1ae46d1b28c5f259bac4d9",
-  measurementId: "G-CLQE06YVBK"
+  storageBucket: "ambuflow-e5ffc.firebasestorage.app"
 });
 
 const messaging = firebase.messaging();

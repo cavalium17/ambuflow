@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SplashScreenProps {
@@ -19,7 +19,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
 
   useEffect(() => {
     const startTime = Date.now();
-    const totalDuration = 3500;
+    const totalDuration = 3000;
 
     const updateProgress = () => {
       const elapsed = Date.now() - startTime;
@@ -29,7 +29,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
         currentProgress = (elapsed / 1000) * 65;
       } else if (elapsed < totalDuration) {
         const phase2Elapsed = elapsed - 1000;
-        currentProgress = 65 + (phase2Elapsed / 2500) * 35;
+        currentProgress = 65 + (phase2Elapsed / (totalDuration - 1000)) * 35;
       } else {
         currentProgress = 100;
       }
@@ -46,9 +46,10 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
         requestAnimationFrame(updateProgress);
       } else {
         setIsReady(true);
+        // On attend un tout petit peu pour que l'utilisateur voit le "Prêt à rouler"
         setTimeout(() => {
           onComplete();
-        }, 800);
+        }, 500);
       }
     };
 
@@ -66,7 +67,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
 
       <div className="relative z-10 flex flex-col items-center gap-12 w-full max-w-sm">
         
-        {/* LOGO AMBUFLOW PRO - REMPLACE L'ANCIENNE ICÔNE */}
+        {/* LOGO AMBUFLOW PRO */}
         <motion.div 
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -80,7 +81,6 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
             src={`https://ambuflow-delta.vercel.app/pwa-512x512.png?t=${cacheBuster}`}
             alt="AmbuFlow Pro"
             className="relative w-56 h-auto drop-shadow-[0_0_30px_rgba(79,70,229,0.4)]"
-            priority="true"
           />
         </motion.div>
 
@@ -135,11 +135,5 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
     </div>
   );
 };
-
-// Petit utilitaire useMemo pour le timestamp unique
-function useMemo<T>(factory: () => T, deps: any[]): T {
-  const [val] = React.useState(factory);
-  return val;
-}
 
 export default SplashScreen;

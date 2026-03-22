@@ -1,9 +1,7 @@
-
 import React, { useMemo } from 'react';
 import { 
   Clock, 
   Play, 
-  Square, 
   Coffee, 
   Zap, 
   TrendingUp, 
@@ -53,7 +51,6 @@ const BoardTab: React.FC<BoardTabProps> = ({
   );
 
   const weeklyHours = useMemo(() => {
-    // Simple calculation for the current week
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay() + 1);

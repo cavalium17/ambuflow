@@ -42,7 +42,7 @@ interface PlanningTabProps {
   availableVehicles: string[];
   hourlyRate: string;
   setActiveTab: (tab: AppTab) => void;
-  overtimeMode?: string;
+  workRegime?: string;
   cpCalculationMode: '25' | '30';
   modulationWeeks?: string;
   modulationStartDate?: string;
@@ -65,7 +65,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   activeShiftId,
   setActiveShiftId,
   availableVehicles,
-  overtimeMode,
+  workRegime,
   cpCalculationMode,
   modulationWeeks,
   modulationStartDate,
@@ -247,7 +247,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   }, [editingShift]);
 
   const modulationPeriod = useMemo(() => {
-    if (overtimeMode !== 'modulation' || !modulationStartDate || !modulationWeeks) return null;
+    if (workRegime !== 'modulation' || !modulationStartDate || !modulationWeeks) return null;
     const start = new Date(modulationStartDate);
     const weeks = parseInt(modulationWeeks);
     if (isNaN(start.getTime()) || isNaN(weeks)) return null;
@@ -257,7 +257,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
       start: start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
       end: end.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
     };
-  }, [overtimeMode, modulationStartDate, modulationWeeks]);
+  }, [workRegime, modulationStartDate, modulationWeeks]);
 
   const navigate = (direction: number) => {
     const newDate = new Date(pivotDate);
@@ -286,10 +286,8 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   }, []);
 
   const handleDeleteShift = useCallback((id: string) => {
-    if (window.confirm("Supprimer cette mission ?")) {
-      setShifts(prev => prev.filter(s => s.id !== id));
-      if (id === activeShiftId) onEndServiceSilently?.();
-    }
+    setShifts(prev => prev.filter(s => s.id !== id));
+    if (id === activeShiftId) onEndServiceSilently?.();
   }, [setShifts, activeShiftId, onEndServiceSilently]);
 
   const handleUpdateShift = useCallback((updatedShift: Shift) => {
