@@ -24,8 +24,7 @@ import {
   ArrowLeft,
   Calendar,
   Plane,
-  AlertTriangle,
-  Zap
+  AlertTriangle
 } from 'lucide-react';
 import { Shift, Break, ServiceStatus, AppTab } from '../types';
 
@@ -37,26 +36,19 @@ interface PlanningTabProps {
   onEndServiceSilently?: () => void;
   appCurrentTime: Date;
   shifts: Shift[];
-  onUpdateShifts: (shifts: Shift[]) => void;
+  setShifts: React.Dispatch<React.SetStateAction<Shift[]>>;
   activeShiftId: string | null;
   setActiveShiftId: React.Dispatch<React.SetStateAction<string | null>>;
   availableVehicles: string[];
   hourlyRate: string;
   setActiveTab: (tab: AppTab) => void;
-  workRegime?: string;
+  overtimeMode?: string;
   cpCalculationMode: '25' | '30';
   modulationWeeks?: string;
   modulationStartDate?: string;
   leaveBalances: { cp: number };
   initialCpBalance: number;
   setInitialCpBalance: (val: number) => void;
-  modulationInfo?: {
-    weekInCycle: number;
-    totalWeeks: number;
-    daysRemaining: number;
-    totalHours: number;
-    progress: number;
-  } | null;
 }
 
 type ViewType = 'week' | 'month';
@@ -69,18 +61,17 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   onEndServiceSilently,
   appCurrentTime,
   shifts,
-  onUpdateShifts,
+  setShifts,
   activeShiftId,
   setActiveShiftId,
   availableVehicles,
-  workRegime,
+  overtimeMode,
   cpCalculationMode,
   modulationWeeks,
   modulationStartDate,
   leaveBalances,
   initialCpBalance,
-  setInitialCpBalance,
-  modulationInfo
+  setInitialCpBalance
 }) => {
   const [viewType, setViewType] = useState<ViewType>('week');
   const [pivotDate, setPivotDate] = useState(new Date(appCurrentTime));
@@ -177,7 +168,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     isActive: false,
     type: 'repas',
     start: '12:00',
-    duration: 30,
+    duration: 45,
     location: 'Entreprise'
   });
 
@@ -256,7 +247,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   }, [editingShift]);
 
   const modulationPeriod = useMemo(() => {
-    if (workRegime !== 'modulation' || !modulationStartDate || !modulationWeeks) return null;
+    if (overtimeMode !== 'modulation' || !modulationStartDate || !modulationWeeks) return null;
     const start = new Date(modulationStartDate);
     const weeks = parseInt(modulationWeeks);
     if (isNaN(start.getTime()) || isNaN(weeks)) return null;
@@ -266,7 +257,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
       start: start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
       end: end.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
     };
-  }, [workRegime, modulationStartDate, modulationWeeks]);
+  }, [overtimeMode, modulationStartDate, modulationWeeks]);
 
   const navigate = (direction: number) => {
     const newDate = new Date(pivotDate);
@@ -295,15 +286,17 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   }, []);
 
   const handleDeleteShift = useCallback((id: string) => {
-    onUpdateShifts(shifts.filter(s => s.id !== id));
-    if (id === activeShiftId) onEndServiceSilently?.();
-  }, [onUpdateShifts, shifts, activeShiftId, onEndServiceSilently]);
+    if (window.confirm("Supprimer cette mission ?")) {
+      setShifts(prev => prev.filter(s => s.id !== id));
+      if (id === activeShiftId) onEndServiceSilently?.();
+    }
+  }, [setShifts, activeShiftId, onEndServiceSilently]);
 
   const handleUpdateShift = useCallback((updatedShift: Shift) => {
     if (updatedShift.id === activeShiftId && updatedShift.end !== '--:--') onEndServiceSilently?.();
-    onUpdateShifts(shifts.map(s => s.id === updatedShift.id ? updatedShift : s));
+    setShifts(prev => prev.map(s => s.id === updatedShift.id ? updatedShift : s));
     setShowEditModal(false);
-  }, [activeShiftId, onEndServiceSilently, onUpdateShifts, shifts]);
+  }, [activeShiftId, onEndServiceSilently, setShifts]);
 
   const validateShift = () => {
     if (!newShift.day || !newShift.start) return;
@@ -320,7 +313,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
       breaks: newShift.breaks 
     };
 
-    onUpdateShifts([shiftData, ...shifts]);
+    setShifts(prev => [shiftData, ...prev]);
     if (!isPast && onAutoStartService) onAutoStartService(shiftId, shiftData.start, shiftData.day);
     setShowAddModal(false);
     setAddFlowStep('choice');
@@ -369,7 +362,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
 
     // On ajoute les shifts. Le useMemo dans App.tsx s'occupera de mettre à jour le solde
     // car il compte le nombre de shifts de type congé.
-    onUpdateShifts([...newShifts, ...shifts]);
+    setShifts(prev => [...newShifts, ...prev]);
     setShowAddModal(false);
     setAddFlowStep('choice');
     setNewLeave({ day: todayStr, endDate: todayStr, type: 'CP' });
@@ -529,34 +522,6 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
         ))}
       </div>
 
-      {workRegime === 'modulation' && modulationInfo && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`p-4 rounded-[32px] border flex items-center justify-between shadow-xl ${
-            darkMode ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'
-          }`}
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-              <Zap size={20} fill="currentColor" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
-                {modulationInfo.weekInCycle === 1 ? 'Début de cycle' : `Semaine ${modulationInfo.weekInCycle} - Modulation`}
-              </p>
-              <p className={`text-xs font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                Cycle de {modulationInfo.totalWeeks} semaines
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Clôture dans</p>
-            <p className="text-sm font-black text-indigo-500 tabular-nums">{modulationInfo.daysRemaining} jours</p>
-          </div>
-        </motion.div>
-      )}
-
       <div className="flex justify-between items-center px-1">
           <div className="flex items-center gap-4">
             <button onClick={() => navigate(-1)} className="p-3 bg-slate-500/5 rounded-2xl hover:bg-slate-500/10 transition-colors"><ChevronLeft size={20} /></button>
@@ -602,7 +567,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
         <div className="space-y-6 animate-slideUp">
           <div className={`${bentoCardBase(false)} p-5 shadow-2xl`}>
             <div className="grid grid-cols-7 mb-4 border-b border-slate-500/5 pb-4">
-              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, idx) => (<div key={idx} className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">{day}</div>))}
+              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(day => (<div key={day} className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">{day}</div>))}
             </div>
             <div className="grid grid-cols-7 gap-y-2">
               {monthDays.map((day, idx) => {
@@ -611,34 +576,10 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                 const isSelected = dStr === selectedDay;
                 const dayShifts = getDayShifts(dStr);
                 const hasShifts = dayShifts.length > 0;
-                const hasCP = dayShifts.some(s => s.isLeave && (s.leaveType === 'CP' || s.leaveType === 'Congés Payés' || s.leaveType === 'Congé' || s.vehicle === 'CONGÉ'));
-                const hasWork = dayShifts.some(s => !s.isLeave && s.vehicle !== 'CONGÉ');
-
                 return (
-                  <button 
-                    key={idx} 
-                    onClick={() => setSelectedDay(dStr)} 
-                    className={`relative aspect-square flex items-center justify-center text-xs font-black transition-all rounded-xl ${
-                      isSelected 
-                        ? (hasCP ? 'bg-orange-600 text-white shadow-xl scale-110 z-10 ring-2 ring-white/30' : 'bg-indigo-600 text-white shadow-xl scale-110 z-10')
-                        : hasCP
-                          ? 'bg-orange-500 text-white shadow-md'
-                          : isToday 
-                            ? 'text-indigo-600 ring-2 ring-indigo-500/20' 
-                            : hasWork 
-                              ? (darkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') 
-                              : 'text-slate-400 hover:bg-slate-500/5'
-                    }`}
-                  >
+                  <button key={idx} onClick={() => setSelectedDay(dStr)} className={`relative aspect-square flex items-center justify-center text-xs font-black transition-all rounded-xl ${isSelected ? 'bg-indigo-600 text-white shadow-xl scale-110 z-10' : isToday ? 'text-indigo-600 ring-2 ring-indigo-500/20' : hasShifts ? (darkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') : 'text-slate-400 hover:bg-slate-500/5'}`}>
                     {day.getDate()}
-                    <div className="absolute bottom-1.5 flex gap-0.5">
-                      {hasWork && !isSelected && !hasCP && (
-                        <div className="w-1 h-1 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
-                      )}
-                      {hasCP && !isSelected && (
-                        <div className="w-1 h-1 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-                      )}
-                    </div>
+                    {hasShifts && !isSelected && <div className="absolute bottom-1 w-0.5 h-0.5 bg-indigo-500 rounded-full" />}
                   </button>
                 );
               })}
@@ -796,13 +737,13 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                       {!tempBreak.isActive ? (
                         <div className="grid grid-cols-2 gap-3">
                           <button 
-                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'cafe', duration: 20, start: '10:00' })}
+                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'cafe', duration: 15, start: '10:00' })}
                             className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
                           >
                             <Coffee size={14} /> Pause Café
                           </button>
                           <button 
-                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 30, start: '12:00' })}
+                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 45, start: '12:00' })}
                             className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
                           >
                             <Utensils size={14} /> Coupure Repas
@@ -834,7 +775,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                               <input 
                                 type="range" 
                                 min="1" 
-                                max="90" 
+                                max="60" 
                                 className="w-full h-1.5 bg-slate-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
                                 value={tempBreak.duration} 
                                 onChange={e => setTempBreak({ ...tempBreak, duration: parseInt(e.target.value) })} 

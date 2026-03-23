@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback, Component, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bell, 
@@ -46,141 +46,22 @@ import {
   CalendarRange,
   RefreshCw,
   ChevronDown,
-  Star,
-  Loader2
+  Star
 } from 'lucide-react';
 import { ServiceStatus, ActivityLog, AppTab, Shift, Break, UserStats, PushNotification as PushType } from './types';
-import SplashScreen from './components/SplashScreen';
-import AuthScreen from './components/AuthScreen';
-import Onboarding from './components/Onboarding';
-import BoardTab from './components/BoardTab';
-import AssistantTab from './components/AssistantTab';
-import PlanningTab from './components/PlanningTab';
-import PaieTab from './components/PaieTab';
-import ProfileTab from './components/ProfileTab';
 import Navigation from './components/Navigation';
+import PaieTab from './components/PaieTab';
+import PlanningTab from './components/PlanningTab';
+import Onboarding from './components/Onboarding';
+import ProfileTab from './components/ProfileTab';
 import PushNotification from './components/PushNotification';
 import DailyRecap from './components/DailyRecap';
-import { auth, db } from './src/firebaseConfig';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { requestNotificationPermissions, requestLocationPermissions, setupNotificationChannels } from './services/notificationManager';
 import { requestForToken, onMessageListener } from './src/firebaseConfig';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: any;
-}
-
-class ErrorBoundary extends Component<any, any> {
-  props: any;
-  state = { hasError: false, error: null };
-  constructor(props: any) {
-    super(props);
-    this.props = props;
-  }
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-
-  render() {
-    const { children } = this.props;
-    if (this.state.hasError) {
-      let errorMessage = "Une erreur est survenue.";
-      try {
-        const parsedError = JSON.parse(this.state.error.message);
-        if (parsedError.error) {
-          errorMessage = `Erreur Firestore (${parsedError.operationType}) : ${parsedError.error}`;
-        }
-      } catch (e) {
-        errorMessage = this.state.error.message || errorMessage;
-      }
-
-      return (
-        <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-          <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-[32px] max-w-md">
-            <AlertTriangle className="text-rose-500 mx-auto mb-4" size={48} />
-            <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Oups ! Quelque chose a coincé.</h2>
-            <p className="text-slate-400 text-sm mb-6">{errorMessage}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs"
-            >
-              Recharger l'application
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
+import NavigationChoiceModal from './src/components/NavigationChoiceModal';
+import { getRestaurantSuggestion, findNearbyRestos, RestaurantSuggestion } from './services/restaurantService';
+import { requestNotificationPermissions, requestLocationPermissions, setupNotificationChannels } from './services/notificationManager';
 
 // Helper pour calculer les jours fériés français
-const BREAK_MIN_DURATION = 20 * 60; // 20 minutes en secondes
-const MEAL_MIN_DURATION = 30 * 60; // 30 minutes en secondes
-const MAX_BREAK_DURATION = 90 * 60; // 1h30 en secondes
 const getFrenchPublicHolidays = (year: number) => {
   const holidays = [
     `${year}-01-01`, // Nouvel An
@@ -226,14 +107,7 @@ const isSundayOrHoliday = (dateStr: string) => {
 };
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [configLoading, setConfigLoading] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
-  const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('home');
-  const [isAuthReady, setIsAuthReady] = useState(false);
-
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [gainsCarouselIndex, setGainsCarouselIndex] = useState(0);
   const [showDailyRecap, setShowDailyRecap] = useState(false);
@@ -254,7 +128,7 @@ const App: React.FC = () => {
   });
 
   const [notifications, setNotifications] = useState<PushType[]>([]);
-  const [pushEnabled, setPushEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(() => localStorage.getItem('ambuflow_push_enabled') !== 'false');
   const [currentGeoPosition, setCurrentGeoPosition] = useState<{ latitude: number; longitude: number; } | null>(null);
   const [shifts, setShifts] = useState<Shift[]>(() => {
     const saved = localStorage.getItem('ambuflow_shifts');
@@ -264,273 +138,200 @@ const App: React.FC = () => {
     return localStorage.getItem('ambuflow_active_shift_id');
   });
 
-  // Consolidated Config State
-  const [userName, setUserName] = useState("");
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [jobTitle, setJobTitle] = useState("Ambulancier DE");
-  const [hourlyRate, setHourlyRate] = useState("12.79");
-  const [companyName, setCompanyName] = useState("");
-  const [companyCity, setCompanyCity] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [qualifications, setQualifications] = useState<string[]>([]);
-  const [entryDate, setEntryDate] = useState("");
-  const [workRegime, setWorkRegime] = useState("weekly");
-  const [monthlyHours, setMonthlyHours] = useState("151.67");
-  const [leaveCalculation, setLeaveCalculation] = useState("25");
-  const [autoGeo, setAutoGeo] = useState(true);
-  const [hasDea, setHasDea] = useState(false);
-  const [hasAux, setHasAux] = useState(false);
-  const [hasTaxiCard, setHasTaxiCard] = useState(false);
-  const [primaryGraduationDate, setPrimaryGraduationDate] = useState("");
-  const [deaDate, setDeaDate] = useState("");
-  const [auxDate, setAuxDate] = useState("");
-  const [taxiDate, setTaxiDate] = useState("");
-  const [taxiCardExpiryDate, setTaxiCardExpiryDate] = useState("");
-  const [taxiFpcDate, setTaxiFpcDate] = useState("");
-  const [afgsuDate, setAfgsuDate] = useState("");
-  const [medicalExpiryDate, setMedicalExpiryDate] = useState("");
-  const [contractStartDate, setContractStartDate] = useState("");
-  const [contractType, setContractType] = useState("CDI");
-  const [hoursBase, setHoursBase] = useState("35");
-  const [cpCalculationMode, setCpCalculationMode] = useState("25");
-  const [modulationStartDate, setModulationStartDate] = useState("");
-  const [modulationWeeks, setModulationWeeks] = useState("4");
-  const [initialCpBalance, setInitialCpBalance] = useState(0);
-  const [customHours, setCustomHours] = useState("");
-  const [followSystemTheme, setFollowSystemTheme] = useState(true);
-
-  // Missing States
-  const [status, setStatus] = useState<ServiceStatus>(ServiceStatus.OFF);
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
-  const [scheduledShiftId, setScheduledShiftId] = useState<string | null>(null);
-  const [showBreakModal, setShowBreakModal] = useState(false);
-  const [breakType, setBreakType] = useState<'meal' | 'coffee'>('meal');
-  const [breakStartTime, setBreakStartTime] = useState("");
-  const [breakDuration, setBreakDuration] = useState(30);
-  const [breakLocation, setBreakLocation] = useState<'Entreprise' | 'Extérieur'>('Entreprise');
-  const [breakStartDateTime, setBreakStartDateTime] = useState<Date | null>(null);
-  const [breakEndTimeActual, setBreakEndTimeActual] = useState<Date | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [nextAutoStart, setNextAutoStart] = useState<Date | null>(null);
-  const [prefersDarkMode, setPrefersDarkMode] = useState(false);
-  const [showAssistant, setShowAssistant] = useState(false);
-
-  const addNotification = useCallback((title: string, message: string, type: 'info' | 'success' | 'warning') => {
-    const newNotif: PushType = {
+  const addNotification = useCallback((title: string, message: string, type: PushType['type'] = 'info', url?: string, action?: PushType['action']) => {
+    console.log("addNotification: Ajout notification:", title);
+    if (!pushEnabled) {
+      console.log("addNotification: Push désactivé");
+      return;
+    }
+    const newNotify: PushType = {
       id: Math.random().toString(36).substr(2, 9),
       title,
       message,
       type,
-      timestamp: new Date()
+      timestamp: new Date(),
+      url,
+      action
     };
-    setNotifications(prev => [newNotif, ...prev]);
-  }, []);
+    setNotifications(prev => [newNotify, ...prev]);
+  }, [pushEnabled]);
 
-  const applyConfig = useCallback((config: any) => {
-    if (config.userName !== undefined) setUserName(prev => prev !== config.userName ? config.userName : prev);
-    if (config.profileImage !== undefined) setProfileImage(prev => prev !== config.profileImage ? config.profileImage : prev);
-    if (config.jobTitle !== undefined) setJobTitle(prev => prev !== config.jobTitle ? config.jobTitle : prev);
-    if (config.hourlyRate !== undefined) setHourlyRate(prev => prev !== config.hourlyRate ? config.hourlyRate : prev);
-    if (config.companyName !== undefined) setCompanyName(prev => prev !== config.companyName ? config.companyName : prev);
-    if (config.companyCity !== undefined) setCompanyCity(prev => prev !== config.companyCity ? config.companyCity : prev);
-    if (config.firstName !== undefined) setFirstName(prev => prev !== config.firstName ? config.firstName : prev);
-    if (config.lastName !== undefined) setLastName(prev => prev !== config.lastName ? config.lastName : prev);
-    if (config.qualifications !== undefined) setQualifications(prev => JSON.stringify(prev) !== JSON.stringify(config.qualifications) ? config.qualifications : prev);
-    if (config.entryDate !== undefined) setEntryDate(prev => prev !== config.entryDate ? config.entryDate : prev);
-    if (config.workRegime !== undefined) setWorkRegime(prev => prev !== config.workRegime ? config.workRegime : prev);
-    if (config.monthlyHours !== undefined) setMonthlyHours(prev => prev !== config.monthlyHours ? config.monthlyHours : prev);
-    if (config.leaveCalculation !== undefined) setLeaveCalculation(prev => prev !== config.leaveCalculation ? config.leaveCalculation : prev);
-    if (config.autoGeo !== undefined) setAutoGeo(prev => prev !== config.autoGeo ? config.autoGeo : prev);
-    if (config.hasDea !== undefined) setHasDea(prev => prev !== config.hasDea ? config.hasDea : prev);
-    if (config.hasAux !== undefined) setHasAux(prev => prev !== config.hasAux ? config.hasAux : prev);
-    if (config.hasTaxiCard !== undefined) setHasTaxiCard(prev => prev !== config.hasTaxiCard ? config.hasTaxiCard : prev);
-    if (config.primaryGraduationDate !== undefined) setPrimaryGraduationDate(prev => prev !== config.primaryGraduationDate ? config.primaryGraduationDate : prev);
-    if (config.deaDate !== undefined) setDeaDate(prev => prev !== config.deaDate ? config.deaDate : prev);
-    if (config.auxDate !== undefined) setAuxDate(prev => prev !== config.auxDate ? config.auxDate : prev);
-    if (config.taxiDate !== undefined) setTaxiDate(prev => prev !== config.taxiDate ? config.taxiDate : prev);
-    if (config.taxiCardExpiryDate !== undefined) setTaxiCardExpiryDate(prev => prev !== config.taxiCardExpiryDate ? config.taxiCardExpiryDate : prev);
-    if (config.taxiFpcDate !== undefined) setTaxiFpcDate(prev => prev !== config.taxiFpcDate ? config.taxiFpcDate : prev);
-    if (config.afgsuDate !== undefined) setAfgsuDate(prev => prev !== config.afgsuDate ? config.afgsuDate : prev);
-    if (config.medicalExpiryDate !== undefined) setMedicalExpiryDate(prev => prev !== config.medicalExpiryDate ? config.medicalExpiryDate : prev);
-    if (config.contractStartDate !== undefined) setContractStartDate(prev => prev !== config.contractStartDate ? config.contractStartDate : prev);
-    if (config.contractType !== undefined) setContractType(prev => prev !== config.contractType ? config.contractType : prev);
-    if (config.hoursBase !== undefined) setHoursBase(prev => prev !== config.hoursBase ? config.hoursBase : prev);
-    if (config.cpCalculationMode !== undefined) setCpCalculationMode(prev => prev !== config.cpCalculationMode ? config.cpCalculationMode : prev);
-    if (config.modulationStartDate !== undefined) setModulationStartDate(prev => prev !== config.modulationStartDate ? config.modulationStartDate : prev);
-    if (config.modulationWeeks !== undefined) setModulationWeeks(prev => prev !== config.modulationWeeks ? config.modulationWeeks : prev);
-    if (config.initialCpBalance !== undefined) setInitialCpBalance(prev => {
-      const newVal = parseFloat(config.initialCpBalance || "0");
-      return prev !== newVal ? newVal : prev;
-    });
-    if (config.customHours !== undefined) setCustomHours(prev => prev !== config.customHours ? config.customHours : prev);
-    if (config.pushEnabled !== undefined) setPushEnabled(prev => prev !== config.pushEnabled ? config.pushEnabled : prev);
-    if (config.followSystemTheme !== undefined) setFollowSystemTheme(prev => prev !== config.followSystemTheme ? config.followSystemTheme : prev);
-    if (config.onboarded !== undefined) setOnboarded(prev => prev !== config.onboarded ? config.onboarded : prev);
-    if (config.shifts !== undefined) setShifts(prev => JSON.stringify(prev) !== JSON.stringify(config.shifts) ? config.shifts : prev);
-    if (config.logs !== undefined) setLogs(prev => JSON.stringify(prev) !== JSON.stringify(config.logs) ? config.logs : prev);
-  }, []);
+  const sendMealNotification = useCallback(async () => {
+    console.log("sendMealNotification: Déclenchement en arrière-plan...");
+    
+    setIsSearchingResto(true);
 
-  const effectiveDarkMode = followSystemTheme ? prefersDarkMode : true;
+    // Timeout de 10 secondes pour la recherche globale
+    const searchTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000));
 
-  // Auth State Listener & Real-time Config Sync
-  useEffect(() => {
-    let unsubscribeSnapshot: (() => void) | null = null;
-
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      setIsAuthReady(true);
-      
-      if (currentUser) {
-        setAuthLoading(true);
-        
-        // Use onSnapshot for real-time updates
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
-          // Avoid re-applying local changes to prevent infinite loops
-          if (docSnap.metadata.hasPendingWrites) return;
-
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            applyConfig(data);
-            if (data.onboarded !== undefined) {
-              setOnboarded(data.onboarded);
-            }
-          } else {
-            setOnboarded(false);
-          }
-          setAuthLoading(false);
-          setConfigLoading(false);
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
-          setAuthLoading(false);
-          setConfigLoading(false);
-        });
+    // Récupération de la position en temps réel
+    const posPromise = new Promise<{latitude: number, longitude: number} | null>((resolve) => {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            });
+          },
+          (error) => {
+            console.error("Erreur géolocalisation:", error);
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
       } else {
-        if (unsubscribeSnapshot) {
-          unsubscribeSnapshot();
-          unsubscribeSnapshot = null;
-        }
-        setAuthLoading(false);
-        setConfigLoading(false);
-        setOnboarded(null);
+        resolve(null);
       }
     });
 
+    // On attend soit la position, soit le timeout de 10s
+    let pos = await Promise.race([posPromise, searchTimeout]);
+
+    if (!pos) {
+      pos = currentGeoPosition;
+    }
+
+    if (!pos) {
+      console.log("sendMealNotification: Position GPS manquante, tentative de récupération forcée...");
+      pos = await requestLocationPermissions();
+    }
+
+    if (pos) {
+      setCurrentGeoPosition(pos);
+    } else {
+      console.log("sendMealNotification: Échec de récupération de la position");
+      setIsSearchingResto(false);
+      return;
+    }
+
+    const activeShift = shifts.find(s => s.id === activeShiftId);
+    const vehicle = activeShift?.vehicle || 'AMBU';
+
+    console.log("sendMealNotification: Recherche restaurant pour", vehicle, "à", pos);
+    
+    // On race aussi la recherche de restaurant contre le timeout restant
+    const suggestionPromise = getRestaurantSuggestion(
+      vehicle,
+      pos.latitude,
+      pos.longitude
+    );
+
+    const suggestion = await Promise.race([suggestionPromise, searchTimeout]);
+
+    setIsSearchingResto(false);
+
+    if (suggestion) {
+      console.log("sendMealNotification: Suggestion trouvée:", suggestion.name);
+      setMealSuggestion(suggestion);
+      console.log("Notification envoyée au gestionnaire système");
+      addNotification(
+        "🍴 Resto trouvé !",
+        `${suggestion.name} est à ${suggestion.distanceMinutes} min. Ouvrir dans Waze/Maps ?`,
+        "info",
+        undefined,
+        'open_navigation'
+      );
+    } else {
+      console.log("sendMealNotification: Aucune suggestion trouvée ou timeout");
+    }
+  }, [pushEnabled, currentGeoPosition, shifts, activeShiftId, addNotification]);
+
+
+
+  const [prefersDarkMode, setPrefersDarkMode] = useState(() => 
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => setPrefersDarkMode(e.matches);
+    mediaQuery.addEventListener('change', handleChange);
     return () => {
-      unsubscribeAuth();
-      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      mediaQuery.removeEventListener('change', handleChange);
     };
-  }, [applyConfig]);
+  }, []);
 
-  const handleSplashComplete = () => {
-    setShowSplash(false);
-  };
+  const [followSystemTheme, setFollowSystemTheme] = useState(() => {
+    const saved = localStorage.getItem('ambuflow_follow_system_theme');
+    return saved === null ? true : saved === 'true';
+  });
 
-  const lastSavedConfigRef = useRef<string>("");
-  const isSavingRef = useRef<boolean>(false);
-
-  const saveConfig = useCallback(async () => {
-    if (!user || onboarded === null || isSavingRef.current) return;
-
-    const config = {
-      userName,
-      profileImage,
-      jobTitle,
-      hourlyRate,
-      companyName,
-      companyCity,
-      firstName,
-      lastName,
-      qualifications,
-      entryDate,
-      workRegime,
-      monthlyHours,
-      leaveCalculation,
-      autoGeo,
-      hasDea,
-      hasAux,
-      hasTaxiCard,
-      primaryGraduationDate,
-      deaDate,
-      auxDate,
-      taxiDate,
-      taxiCardExpiryDate,
-      taxiFpcDate,
-      afgsuDate,
-      medicalExpiryDate,
-      contractStartDate,
-      contractType,
-      hoursBase,
-      cpCalculationMode,
-      modulationStartDate,
-      modulationWeeks,
-      initialCpBalance,
-      customHours,
-      pushEnabled,
-      followSystemTheme,
-      onboarded,
-      shifts,
-      logs,
-      updatedAt: new Date().toISOString()
-    };
-    
-    const configStr = JSON.stringify(config);
-    if (configStr === lastSavedConfigRef.current) return;
-
-    lastSavedConfigRef.current = configStr;
-    localStorage.setItem('ambuflow_config', configStr);
-    
-    try {
-      isSavingRef.current = true;
-      await setDoc(doc(db, 'users', user.uid), config, { merge: true });
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("aborted")) {
-        console.warn("Firestore write aborted (expected during rapid updates)");
-      } else {
-        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
-      }
-    } finally {
-      isSavingRef.current = false;
-    }
-  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, pushEnabled, followSystemTheme, onboarded, shifts, logs]);
-
-  const nextMission = useMemo(() => {
-    const now = currentTime;
-    const todayStr = getLocalDateString(now);
-    
-    // Find upcoming shifts (today or future) that haven't started yet
-    const upcoming = shifts
-      .filter(s => !s.isLeave && s.start !== '--:--' && s.end === '--:--')
-      .filter(s => {
-        const [h, m] = s.start.split(':').map(Number);
-        const shiftDate = new Date(s.day);
-        shiftDate.setHours(h, m, 0, 0);
-        return shiftDate > now;
-      })
-      .sort((a, b) => {
-        const dateA = new Date(a.day + 'T' + a.start);
-        const dateB = new Date(b.day + 'T' + b.start);
-        return dateA.getTime() - dateB.getTime();
-      });
-
-    return upcoming[0] || null;
-  }, [shifts, currentTime]);
-
-  const todayPlannedShift = useMemo(() => {
-    const todayStr = getLocalDateString(currentTime);
-    return shifts.find(s => s.day === todayStr && !s.isLeave && s.start !== '--:--' && s.end === '--:--' && s.id !== activeShiftId);
-  }, [shifts, currentTime, activeShiftId]);
+  const effectiveDarkMode = followSystemTheme ? prefersDarkMode : false;
 
   useEffect(() => {
-    if (user) {
-      const timeout = setTimeout(() => {
-        saveConfig();
-      }, 1000); // Debounce saves by 1 second
-      return () => clearTimeout(timeout);
+    if (effectiveDarkMode) {
+      document.documentElement.classList.add('dark');
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', '#020617'); // slate-950
+    } else {
+      document.documentElement.classList.remove('dark');
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', '#F8FAFC'); // slate-50
     }
-  }, [user, saveConfig, shifts, logs]);
+  }, [effectiveDarkMode]);
+
+  const [status, setStatus] = useState<ServiceStatus>(() => {
+    return (localStorage.getItem('ambuflow_status') as ServiceStatus) || ServiceStatus.OFF;
+  });
+  const [logs, setLogs] = useState<ActivityLog[]>(() => {
+    const saved = localStorage.getItem('ambuflow_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('ambuflow_session_start');
+    return saved ? new Date(saved) : null;
+  });
+  
+  const [scheduledShiftId, setScheduledShiftId] = useState<string | null>(() => {
+    return localStorage.getItem('ambuflow_scheduled_shift_id');
+  });
+
+  const [showBreakModal, setShowBreakModal] = useState(false);
+  const [breakType, setBreakType] = useState<'meal' | 'coffee' | null>(null);
+  const [breakStartTime, setBreakStartTime] = useState("");
+  const [breakDuration, setBreakDuration] = useState(30);
+  const [breakLocation, setBreakLocation] = useState<'Entreprise' | 'Extérieur'>('Entreprise');
+  
+  const [breakStartDateTime, setBreakStartDateTime] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('ambuflow_break_start_datetime');
+    return saved ? new Date(saved) : null;
+  });
+  
+  const [breakEndTimeActual, setBreakEndTimeActual] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('ambuflow_break_end');
+    return saved ? new Date(saved) : null;
+  });
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('ambuflow_onboarded') !== 'true');
+  const [nextAutoStart, setNextAutoStart] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('ambuflow_next_autostart');
+    return saved ? new Date(saved) : null;
+  });
+
+  const [userName, setUserName] = useState(() => localStorage.getItem('ambuflow_user_name') || "");
+  const [profileImage, setProfileImage] = useState(() => localStorage.getItem('ambuflow_profile_image') || null);
+  const [jobTitle, setJobTitle] = useState(() => localStorage.getItem('ambuflow_job_title') || "Ambulancier DE");
+  const [hourlyRate, setHourlyRate] = useState(() => localStorage.getItem('ambuflow_hourly_rate') || "12.79");
+  const [companyName, setCompanyName] = useState(() => localStorage.getItem('ambuflow_company_name') || "");
+  const [autoGeo, setAutoGeo] = useState(() => localStorage.getItem('ambuflow_autogeo') !== 'false');
+  const [hasDea, setHasDea] = useState(() => localStorage.getItem('ambuflow_has_dea') === 'true');
+  const [hasAux, setHasAux] = useState(() => localStorage.getItem('ambuflow_has_aux') === 'true');
+  const [hasTaxiCard, setHasTaxiCard] = useState(() => localStorage.getItem('ambuflow_has_taxi') === 'true');
+  
+  const [primaryGraduationDate, setPrimaryGraduationDate] = useState(() => localStorage.getItem('ambuflow_primary_grad_date') || "");
+  const [deaDate, setDeaDate] = useState(() => localStorage.getItem('ambuflow_dea_date') || "");
+  const [auxDate, setAuxDate] = useState(() => localStorage.getItem('ambuflow_aux_date') || "");
+  const [taxiDate, setTaxiDate] = useState(() => localStorage.getItem('ambuflow_taxi_date') || "");
+  const [taxiCardExpiryDate, setTaxiCardExpiryDate] = useState(() => localStorage.getItem('ambuflow_taxi_card_expiry') || "");
+  const [taxiFpcDate, setTaxiFpcDate] = useState(() => localStorage.getItem('ambuflow_taxi_fpc_date') || "");
+  const [afgsuDate, setAfgsuDate] = useState(() => localStorage.getItem('ambuflow_afgsu_date') || "");
+  const [medicalExpiryDate, setMedicalExpiryDate] = useState(() => localStorage.getItem('ambuflow_medical_expiry') || localStorage.getItem('date_aptitude_medicale')?.split('T')[0] || "");
+
+  const [mealSuggestion, setMealSuggestion] = useState<RestaurantSuggestion | null>(null);
+  const [isSearchingResto, setIsSearchingResto] = useState(false);
+  const [isNavigationModalOpen, setIsNavigationModalOpen] = useState(false);
 
   // Permissions et Notifications
   useEffect(() => {
@@ -568,13 +369,14 @@ const App: React.FC = () => {
       // Déclenchement personnalisé via Data Payload
       if (payload?.data?.type === 'MEAL_TRIGGER') {
         console.log("FCM: Déclenchement à distance de la suggestion repas");
+        sendMealNotification();
       }
     });
 
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [pushEnabled, addNotification]);
+  }, [pushEnabled, addNotification, sendMealNotification]);
 
   // Notification Restaurant Automatique
   useEffect(() => {
@@ -590,6 +392,7 @@ const App: React.FC = () => {
         const mealKey = `meal_notif_${todayStr}_${hour < 15 ? 'lunch' : 'dinner'}`;
         
         if (!localStorage.getItem(mealKey)) {
+          sendMealNotification();
           localStorage.setItem(mealKey, 'true');
         }
       }
@@ -618,7 +421,11 @@ const App: React.FC = () => {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [status, activeShiftId, shifts, pushEnabled, addNotification]);
+  }, [status, activeShiftId, shifts, sendMealNotification, pushEnabled]);
+
+  const [hoursBase, setHoursBase] = useState(() => localStorage.getItem('ambuflow_hours_base') || "35");
+  const [cpCalculationMode, setCpCalculationMode] = useState(() => localStorage.getItem('ambuflow_cp_mode') || "25");
+  const [overtimeMode, setOvertimeMode] = useState(() => localStorage.getItem('ambuflow_overtime_mode') || "weekly");
 
   // Notification Rapport Mensuel (1er du mois à 00:01)
   useEffect(() => {
@@ -644,7 +451,9 @@ const App: React.FC = () => {
     checkMonthlyReport();
     const interval = setInterval(checkMonthlyReport, 3600000);
     return () => clearInterval(interval);
-  }, [addNotification, cpCalculationMode, setInitialCpBalance]);
+  }, [addNotification, cpCalculationMode]);
+
+  const [contractStartDate, setContractStartDate] = useState(() => localStorage.getItem('ambuflow_contract_start') || "");
 
   const seniorityInfo = useMemo(() => {
     if (!contractStartDate) return { years: 0, months: 0, bonus: 0, text: "N/A" };
@@ -677,6 +486,11 @@ const App: React.FC = () => {
     const base = parseFloat(hourlyRate) || 0;
     return (base * (1 + seniorityInfo.bonus)).toFixed(2);
   }, [hourlyRate, seniorityInfo.bonus]);
+  const [modulationStartDate, setModulationStartDate] = useState(() => localStorage.getItem('ambuflow_modulation_start') || "");
+  const [modulationWeeks, setModulationWeeks] = useState(() => localStorage.getItem('ambuflow_modulation_weeks') || "4");
+
+  const [initialCpBalance, setInitialCpBalance] = useState(() => parseFloat(localStorage.getItem('ambuflow_initial_cp') || "0"));
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -823,13 +637,15 @@ const App: React.FC = () => {
     setStatus(ServiceStatus.WORKING);
     setBreakEndTimeActual(null);
     setBreakStartDateTime(null);
+    setMealSuggestion(null);
     addLog("Reprise de mission", "resume");
   }, [activeShiftId, status, currentTime, addLog]);
 
   const handleOpenBreakModal = useCallback((type: 'meal' | 'coffee') => {
     setBreakType(type);
+    setMealSuggestion(null);
     setBreakStartTime(currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
-    setBreakDuration(type === 'meal' ? 30 : 20);
+    setBreakDuration(type === 'meal' ? 45 : 15);
     setBreakLocation('Entreprise');
     setShowBreakModal(true);
   }, [currentTime]);
@@ -890,93 +706,31 @@ const App: React.FC = () => {
       console.log("Bouton cliqué: Passage en pause");
       setStatus(ServiceStatus.BREAK);
       addLog(breakType === 'meal' ? "Pause Déjeuner" : "Pause Café", "break");
+      
+      // Suggestion de restauration si c'est un repas à l'extérieur (EN ARRIÈRE-PLAN)
+      if (breakType === 'meal' && breakLocation === 'Extérieur') {
+        console.log("handleConfirmBreak: Lancement recherche resto en arrière-plan");
+        sendMealNotification(); // Pas de await ici
+      }
     } else {
       addLog(breakType === 'meal' ? "Modification Déjeuner" : "Modification Café", "break");
     }
     
     setShowBreakModal(false);
     setActiveTab('home'); // Redirection vers le Board
-  }, [breakStartTime, breakDuration, breakLocation, breakType, currentTime, activeShiftId, addLog, status]);
+  }, [breakStartTime, breakDuration, breakLocation, breakType, currentTime, activeShiftId, addLog, status, sendMealNotification]);
 
-  const handleToggleBreak = useCallback(() => {
-    if (status === ServiceStatus.WORKING) {
-      handleOpenBreakModal('meal');
-    } else if (status === ServiceStatus.BREAK) {
-      handleResume();
-    }
-  }, [status, handleOpenBreakModal, handleResume]);
-
-  const handleLogout = useCallback(async () => {
-    try {
-      await auth.signOut();
-      setUser(null);
-      // We don't clear localStorage.getItem('ambuflow_config') as per requirements
-      localStorage.removeItem('ambuflow_auth_session');
-      setActiveTab('home');
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
+  const handleLogout = useCallback(() => {
+    setShowOnboarding(true);
+    localStorage.removeItem('ambuflow_onboarded');
   }, []);
 
-  const handleResetData = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      // Fetch current doc to preserve email and createdAt
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-      const email = userData.email || user.email;
-      const createdAt = userData.createdAt || new Date().toISOString();
-
-      const initialData = {
-        email,
-        createdAt,
-        userName: "",
-        profileImage: null,
-        jobTitle: "Ambulancier DE",
-        hourlyRate: "12.79",
-        companyName: "",
-        autoGeo: true,
-        hasDea: false,
-        hasAux: false,
-        hasTaxiCard: false,
-        primaryGraduationDate: "",
-        deaDate: "",
-        auxDate: "",
-        taxiDate: "",
-        taxiCardExpiryDate: "",
-        taxiFpcDate: "",
-        afgsuDate: "",
-        medicalExpiryDate: "",
-        contractStartDate: "",
-        contractType: "CDI",
-        hoursBase: "35",
-        cpCalculationMode: "25",
-        workRegime: "weekly",
-        modulationStartDate: "",
-        modulationWeeks: "4",
-        initialCpBalance: 0,
-        customHours: "",
-        followSystemTheme: true,
-        pushEnabled: true,
-        shifts: [],
-        logs: [],
-        onboarded: false,
-        updatedAt: new Date().toISOString()
-      };
-
-      // 1. Reset Firestore - Overwrite with initial state but keep identity
-      await setDoc(doc(db, 'users', user.uid), initialData);
-      
-      // 2. Clear Local Storage
+  const handleResetData = useCallback(() => {
+    if (window.confirm("⚠️ ATTENTION : Cela effacera toutes vos données. Continuer ?")) {
       localStorage.clear();
-
-      // 3. Success Feedback & Reload
       window.location.reload();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     if (scheduledShiftId) {
@@ -1035,8 +789,45 @@ const App: React.FC = () => {
     if (breakEndTimeActual) localStorage.setItem('ambuflow_break_end', breakEndTimeActual.toISOString());
     else localStorage.removeItem('ambuflow_break_end');
 
+    localStorage.setItem('ambuflow_user_name', userName);
+    localStorage.setItem('ambuflow_job_title', jobTitle);
+    localStorage.setItem('ambuflow_hourly_rate', hourlyRate);
+    localStorage.setItem('ambuflow_company_name', companyName);
     localStorage.setItem('ambuflow_user_stats', JSON.stringify(userStats));
-  }, [status, logs, activeShiftId, scheduledShiftId, shifts, nextAutoStart, breakStartDateTime, breakEndTimeActual, userStats]);
+    localStorage.setItem('ambuflow_has_dea', String(hasDea));
+    localStorage.setItem('ambuflow_has_aux', String(hasAux));
+    localStorage.setItem('ambuflow_has_taxi', String(hasTaxiCard));
+    
+    localStorage.setItem('ambuflow_primary_grad_date', primaryGraduationDate);
+    localStorage.setItem('ambuflow_dea_date', deaDate);
+    localStorage.setItem('ambuflow_aux_date', auxDate);
+    localStorage.setItem('ambuflow_taxi_date', taxiDate);
+    localStorage.setItem('ambuflow_taxi_card_expiry', taxiCardExpiryDate);
+    localStorage.setItem('ambuflow_taxi_fpc_date', taxiFpcDate);
+    localStorage.setItem('ambuflow_afgsu_date', afgsuDate);
+    localStorage.setItem('ambuflow_medical_expiry', medicalExpiryDate);
+    if (medicalExpiryDate) {
+      try {
+        const isoDate = new Date(medicalExpiryDate).toISOString();
+        localStorage.setItem('date_aptitude_medicale', isoDate);
+      } catch (e) {
+        localStorage.setItem('date_aptitude_medicale', medicalExpiryDate);
+      }
+    } else {
+      localStorage.removeItem('date_aptitude_medicale');
+    }
+
+    localStorage.setItem('ambuflow_contract_start', contractStartDate);
+    localStorage.setItem('ambuflow_hours_base', hoursBase);
+    localStorage.setItem('ambuflow_cp_mode', cpCalculationMode);
+    localStorage.setItem('ambuflow_overtime_mode', overtimeMode);
+    localStorage.setItem('ambuflow_modulation_start', modulationStartDate);
+    localStorage.setItem('ambuflow_modulation_weeks', modulationWeeks);
+    localStorage.setItem('ambuflow_initial_cp', initialCpBalance.toString());
+    localStorage.setItem('ambuflow_push_enabled', String(pushEnabled));
+    localStorage.setItem('ambuflow_autogeo', String(autoGeo));
+    localStorage.setItem('ambuflow_follow_system_theme', String(followSystemTheme));
+  }, [status, logs, activeShiftId, scheduledShiftId, shifts, nextAutoStart, breakStartDateTime, breakEndTimeActual, userName, jobTitle, hourlyRate, companyName, userStats, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, hoursBase, cpCalculationMode, overtimeMode, modulationStartDate, modulationWeeks, initialCpBalance, pushEnabled, autoGeo, followSystemTheme]);
 
   // Logique AFGSU
   const afgsuStatus = useMemo(() => {
@@ -1113,26 +904,16 @@ const App: React.FC = () => {
     const [y, mon, d] = activeShift.day.split('-').map(Number);
     const [startH, startM] = activeShift.start.split(':').map(Number);
     const startDate = new Date(y, mon - 1, d, startH, startM, 0, 0);
-    
-    const isCurrentlyInBreak = status === ServiceStatus.BREAK && activeShift.breaks?.length;
-    const lastBreak = isCurrentlyInBreak ? activeShift.breaks![activeShift.breaks!.length - 1] : null;
-    
-    let effectiveNow = isCurrentlyInBreak 
-        ? new Date(y, mon - 1, d, parseInt(lastBreak!.start.split(':')[0]), parseInt(lastBreak!.start.split(':')[1]))
+    let effectiveNow = (status === ServiceStatus.BREAK && activeShift.breaks?.length) 
+        ? new Date(y, mon - 1, d, parseInt(activeShift.breaks[activeShift.breaks.length-1].start.split(':')[0]), parseInt(activeShift.breaks[activeShift.breaks.length-1].start.split(':')[1]))
         : currentTime;
-        
     let diffMs = effectiveNow.getTime() - startDate.getTime();
     if (diffMs < 0) return "00:00:00";
-    
-    if (activeShift.breaks) {
-      activeShift.breaks.forEach(b => { 
-        // On ne soustrait que les pauses terminées AVANT le moment effectif actuel
-        // Si on est en pause, effectiveNow est le début de la pause actuelle, donc on ne la soustrait pas
-        if (b.end !== '--:--' && b.id !== lastBreak?.id) {
-          diffMs -= (b.duration * 60000); 
-        }
-      });
-    }
+    if (activeShift.breaks) activeShift.breaks.forEach(b => { 
+      if (b.end !== '--:--' || (status === ServiceStatus.BREAK && b.id === activeShift.breaks?.[activeShift.breaks.length-1].id)) {
+        diffMs -= (b.duration * 60000); 
+      }
+    });
     const h = Math.floor(Math.max(0, diffMs) / 3600000);
     const m = Math.floor((Math.max(0, diffMs) % 3600000) / 60000);
     const s = Math.floor((Math.max(0, diffMs) % 60000) / 1000);
@@ -1158,63 +939,6 @@ const App: React.FC = () => {
     return Math.max(0, eff);
   }, [activeShiftId, currentTime]);
 
-  const getCurrentModulationCycle = useCallback((startDateStr: string, weeksStr: string) => {
-    if (!startDateStr || !weeksStr) return null;
-    
-    const startDate = new Date(startDateStr);
-    startDate.setHours(0, 0, 0, 0);
-    
-    const weeks = parseInt(weeksStr);
-    const now = new Date(currentTime);
-    now.setHours(0, 0, 0, 0);
-    
-    const diffTime = now.getTime() - startDate.getTime();
-    if (diffTime < 0) return null;
-    
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const totalWeeksElapsed = Math.floor(diffDays / 7);
-    
-    const currentCycleIndex = Math.floor(totalWeeksElapsed / weeks);
-    const weekInCycle = (totalWeeksElapsed % weeks) + 1;
-    
-    const cycleStartDate = new Date(startDate);
-    cycleStartDate.setDate(startDate.getDate() + (currentCycleIndex * weeks * 7));
-    
-    const cycleEndDate = new Date(cycleStartDate);
-    cycleEndDate.setDate(cycleStartDate.getDate() + (weeks * 7) - 1);
-    cycleEndDate.setHours(23, 59, 59, 999);
-    
-    const daysRemaining = Math.ceil((cycleEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
-    const cycleShifts = shifts.filter(s => {
-      const shiftDate = new Date(s.day);
-      return shiftDate >= cycleStartDate && shiftDate <= cycleEndDate && s.end !== '--:--';
-    });
-    
-    let totalMinutes = 0;
-    cycleShifts.forEach(s => {
-      totalMinutes += calculateEffectiveMinutes(s);
-    });
-    
-    const totalHours = totalMinutes / 60;
-    const progress = (totalWeeksElapsed % weeks + (diffDays % 7) / 7) / weeks * 100;
-
-    return {
-      weekInCycle,
-      totalWeeks: weeks,
-      cycleEndDate,
-      daysRemaining,
-      totalHours,
-      progress,
-      cycleStartDate
-    };
-  }, [currentTime, shifts, calculateEffectiveMinutes]);
-
-  const modulationInfo = useMemo(() => {
-    if (workRegime !== 'modulation' || !modulationStartDate) return null;
-    return getCurrentModulationCycle(modulationStartDate, modulationWeeks);
-  }, [workRegime, modulationStartDate, modulationWeeks, getCurrentModulationCycle]);
-
   const periodStats = useMemo(() => {
     let totalMin = 0;
     let targetMin = (parseInt(hoursBase) || 35) * 60;
@@ -1224,7 +948,7 @@ const App: React.FC = () => {
     let color = "indigo";
     let extraData: any = null;
 
-    if (workRegime === 'weekly') {
+    if (overtimeMode === 'weekly') {
       const monday = new Date(currentTime);
       const day = monday.getDay();
       const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
@@ -1238,7 +962,7 @@ const App: React.FC = () => {
       subtitle = "Objectif 35h/39h";
       icon = CalendarRange;
       targetMin = (parseInt(hoursBase) || 35) * 60;
-    } else if (workRegime === 'fortnightly') {
+    } else if (overtimeMode === 'fortnightly') {
       const anchor = contractStartDate ? new Date(contractStartDate) : new Date(2024, 0, 1);
       const diffDays = Math.floor((currentTime.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24));
       const startOfCycle = new Date(anchor);
@@ -1253,25 +977,34 @@ const App: React.FC = () => {
       icon = Layers;
       color = "violet";
       targetMin = (parseInt(hoursBase) || 35) * 2 * 60;
-    } else if (workRegime === 'modulation' && modulationInfo) {
-      targetMin = (parseInt(hoursBase) || 35) * modulationInfo.totalWeeks * 60;
-      totalMin = modulationInfo.totalHours * 60;
+    } else if (overtimeMode === 'modulation') {
+      const start = modulationStartDate ? new Date(modulationStartDate) : new Date();
+      const weeks = parseInt(modulationWeeks) || 4;
+      const end = new Date(start);
+      end.setDate(start.getDate() + (weeks * 7));
+      shifts.forEach(s => {
+        const d = new Date(s.day);
+        if (d >= start && d <= end) totalMin += calculateEffectiveMinutes(s);
+      });
+      targetMin = (parseInt(hoursBase) || 35) * weeks * 60;
       const remainingMin = Math.max(0, targetMin - totalMin);
-      
+      const timeRemainingMs = end.getTime() - currentTime.getTime();
+      const daysLeft = Math.floor(timeRemainingMs / (1000 * 60 * 60 * 24));
+      const hoursLeft = Math.floor((timeRemainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       extraData = {
         targetHours: targetMin / 60,
         performedHours: Math.floor(totalMin / 60),
-        performedMins: Math.round(totalMin % 60),
+        performedMins: totalMin % 60,
         remainingHours: Math.floor(remainingMin / 60),
-        remainingMins: Math.round(remainingMin % 60),
-        countdown: `${modulationInfo.daysRemaining}j`,
+        remainingMins: remainingMin % 60,
+        countdown: `${daysLeft}j ${hoursLeft}h`,
         progress: Math.min(100, (totalMin / targetMin) * 100)
       };
       title = "Modulation";
-      subtitle = `Semaine ${modulationInfo.weekInCycle}/${modulationInfo.totalWeeks}`;
+      subtitle = `${weeks} semaines`;
       icon = RefreshCw;
       color = "emerald";
-    } else if (workRegime === 'annualization') {
+    } else if (overtimeMode === 'annualization') {
       const start = new Date(currentTime.getFullYear(), 0, 1);
       shifts.forEach(s => {
         const d = new Date(s.day);
@@ -1284,10 +1017,10 @@ const App: React.FC = () => {
       targetMin = 1607 * 60;
     }
     const h = Math.floor(totalMin / 60);
-    const m = Math.round(totalMin % 60);
+    const m = totalMin % 60;
     const progress = Math.min(100, (totalMin / targetMin) * 100);
     return { title, subtitle, icon, value: `${h}h ${m}m`, color, extraData, progress };
-  }, [shifts, workRegime, calculateEffectiveMinutes, currentTime, contractStartDate, modulationStartDate, modulationWeeks, hoursBase, modulationInfo]);
+  }, [shifts, overtimeMode, calculateEffectiveMinutes, currentTime, contractStartDate, modulationStartDate, modulationWeeks, hoursBase]);
 
   const todayStats = useMemo(() => {
     const todayStr = getLocalDateString(currentTime);
@@ -1470,23 +1203,23 @@ const App: React.FC = () => {
     let ambuMin = 0;
     let vslMin = 0;
     
-    // Get shifts for the current period based on workRegime
+    // Get shifts for the current period based on overtimeMode
     let periodShifts = shifts;
-    if (workRegime === 'weekly') {
+    if (overtimeMode === 'weekly') {
       const monday = new Date(currentTime);
       const day = monday.getDay();
       const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
       monday.setDate(diff);
       monday.setHours(0, 0, 0, 0);
       periodShifts = shifts.filter(s => new Date(s.day) >= monday);
-    } else if (workRegime === 'fortnightly') {
+    } else if (overtimeMode === 'fortnightly') {
       const anchor = contractStartDate ? new Date(contractStartDate) : new Date(2024, 0, 1);
       const diffDays = Math.floor((currentTime.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24));
       const startOfCycle = new Date(anchor);
       startOfCycle.setDate(anchor.getDate() + Math.floor(diffDays / 14) * 14);
       startOfCycle.setHours(0, 0, 0, 0);
       periodShifts = shifts.filter(s => new Date(s.day) >= startOfCycle);
-    } else if (workRegime === 'modulation') {
+    } else if (overtimeMode === 'modulation') {
       const start = modulationStartDate ? new Date(modulationStartDate) : new Date();
       const weeks = parseInt(modulationWeeks) || 4;
       const end = new Date(start);
@@ -1495,7 +1228,7 @@ const App: React.FC = () => {
         const d = new Date(s.day);
         return d >= start && d <= end;
       });
-    } else if (workRegime === 'annualization') {
+    } else if (overtimeMode === 'annualization') {
       const start = new Date(currentTime.getFullYear(), 0, 1);
       periodShifts = shifts.filter(s => new Date(s.day) >= start);
     }
@@ -1516,7 +1249,7 @@ const App: React.FC = () => {
       ? `conic-gradient(#FF4B5C 0% ${pAssu}%, #10b981 ${pAssu}% ${pAssu + pAmbu}%, #6366f1 ${pAssu + pAmbu}% 100%)`
       : `conic-gradient(#e2e8f0 0% 100%)`;
     return { assu: pAssu.toFixed(0), ambu: pAmbu.toFixed(0), vsl: pVsl.toFixed(0), gradient, hasData: total > 0 };
-  }, [shifts, calculateEffectiveMinutes, workRegime, currentTime, contractStartDate, modulationStartDate, modulationWeeks]);
+  }, [shifts, calculateEffectiveMinutes, overtimeMode, currentTime, contractStartDate, modulationStartDate, modulationWeeks]);
 
   const getNextShiftCountdown = () => {
     if (!nextAutoStart) return null;
@@ -1529,35 +1262,41 @@ const App: React.FC = () => {
     return `${days > 0 ? `J-${days} ` : ''}${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleUpdateShifts = useCallback((newShifts: Shift[]) => {
-    setShifts(newShifts);
-  }, []);
+  const refreshMealSuggestion = useCallback(() => {
+    if (activeShiftId) {
+      const activeShift = shifts.find(s => s.id === activeShiftId);
+      if (activeShift) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const suggestion = await getRestaurantSuggestion(
+            activeShift.vehicle,
+            pos.coords.latitude,
+            pos.coords.longitude
+          );
+          if (suggestion) {
+            setMealSuggestion(suggestion);
+          }
+        });
+      }
+    }
+  }, [activeShiftId, shifts]);
 
   const renderHome = () => {
     const bentoCardBase = `relative overflow-hidden transition-all duration-500 rounded-[32px] border ${effectiveDarkMode ? 'bg-slate-900/60 border-white/5 shadow-2xl shadow-black/40' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/40'} backdrop-blur-xl`;
     const nextCountdown = getNextShiftCountdown();
     const todayStr = getLocalDateString(currentTime);
-    const todayShift = shifts.find(s => s.day === todayStr && s.end !== '--:--');
-    const isTodayFinished = !!todayShift;
+    const todayShift = shifts.find(s => s.day === todayStr);
+    const isTodayFinished = todayShift && todayShift.end !== '--:--';
     const PeriodIcon = periodStats.icon;
     
     const isBreakActive = status === ServiceStatus.BREAK && (!breakStartDateTime || currentTime >= breakStartDateTime);
-    
-    const activeShift = activeShiftId ? shifts.find(s => s.id === activeShiftId) : null;
-    const lastBreak = activeShift?.breaks?.[activeShift.breaks.length - 1];
-    
-    const minBreakDuration = lastBreak?.isMeal ? MEAL_MIN_DURATION : BREAK_MIN_DURATION;
-    const elapsedBreakSeconds = status === ServiceStatus.BREAK && breakStartDateTime 
-      ? Math.floor((currentTime.getTime() - breakStartDateTime.getTime()) / 1000) 
-      : 0;
-
-    const isBreakFinished = status === ServiceStatus.BREAK && elapsedBreakSeconds >= MAX_BREAK_DURATION;
-    const canResume = status === ServiceStatus.BREAK && elapsedBreakSeconds >= minBreakDuration;
     
     let breakBackgroundImage = 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=800'; 
     let breakLabel = "COUPURE";
     
     if (isBreakActive && activeShiftId) {
+      const activeShift = shifts.find(s => s.id === activeShiftId);
+      const lastBreak = activeShift?.breaks?.[activeShift.breaks.length - 1];
+      
       if (lastBreak?.isMeal) {
         breakLabel = "COUPURE REPAS";
         if (lastBreak.location === 'Entreprise') {
@@ -1573,45 +1312,6 @@ const App: React.FC = () => {
 
     return (
       <div className="p-5 space-y-5 animate-fadeIn pb-32">
-        {/* Prochaine Mission / Mission du jour */}
-        {status === ServiceStatus.OFF && !isTodayFinished && todayPlannedShift && (
-          <div className={`p-6 rounded-[32px] border animate-slideUp flex flex-col gap-4 ${effectiveDarkMode ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-indigo-500 text-white">
-                  <Calendar size={18} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Mission prévue aujourd'hui</p>
-                  <p className="text-sm font-black">{todayPlannedShift.start} — {todayPlannedShift.vehicle} ({todayPlannedShift.crew})</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => handleStartService(todayPlannedShift.id)}
-                className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-              >
-                Démarrer
-              </button>
-            </div>
-          </div>
-        )}
-
-        {status === ServiceStatus.OFF && !todayPlannedShift && nextMission && (
-          <div className={`p-6 rounded-[32px] border animate-slideUp flex items-center gap-4 ${effectiveDarkMode ? 'bg-slate-900/40 border-white/5' : 'bg-slate-50 border-slate-100'}`}>
-            <div className="p-2.5 rounded-xl bg-slate-500/10 text-slate-400">
-              <Clock size={18} />
-            </div>
-            <div className="flex-1">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prochaine mission</p>
-              <p className="text-sm font-black">
-                {new Date(nextMission.day).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })} à {nextMission.start}
-              </p>
-            </div>
-            <button onClick={() => setActiveTab('planning')} className="p-2 text-slate-400 hover:text-indigo-500 transition-colors">
-              <ChevronRight size={20} />
-            </button>
-          </div>
-        )}
         {afgsuStatus && afgsuStatus !== 'valid' && (
           <div className={`p-4 rounded-[24px] border flex items-center gap-4 animate-slideUp ${
             afgsuStatus === 'expired' 
@@ -1736,14 +1436,10 @@ const App: React.FC = () => {
               <div className="animate-fadeIn">
                  <p className="text-[10px] font-black uppercase opacity-40 tracking-widest mb-2">
                    {status === ServiceStatus.BREAK 
-                     ? (breakStartDateTime && currentTime < breakStartDateTime 
-                        ? 'Début dans' 
-                        : (elapsedBreakSeconds >= MAX_BREAK_DURATION 
-                           ? 'ALERTE' 
-                           : (elapsedBreakSeconds < minBreakDuration ? 'Avant Minimum' : 'Avant Maximum'))) 
+                     ? (breakStartDateTime && currentTime < breakStartDateTime ? 'Début dans' : 'Temps restant') 
                      : (status === ServiceStatus.OFF ? (isTodayFinished ? 'Total Travaillé' : 'Heure actuelle') : 'Compteur journalier')}
                  </p>
-                 <h1 className={`font-black tabular-nums tracking-tighter leading-none drop-shadow-2xl ${isBreakFinished ? 'text-rose-500 animate-blink-red text-4xl py-4' : 'text-7xl'}`}>
+                 <h1 className="text-7xl font-black tabular-nums tracking-tighter leading-none drop-shadow-2xl">
                    {status === ServiceStatus.BREAK ? (() => { 
                      if (breakStartDateTime && currentTime < breakStartDateTime) {
                        const diff = breakStartDateTime.getTime() - currentTime.getTime();
@@ -1751,19 +1447,12 @@ const App: React.FC = () => {
                        const s = Math.floor((diff % 60000) / 1000);
                        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                      }
-                     if (!breakStartDateTime) return "00:00";
-                     
-                     if (elapsedBreakSeconds >= MAX_BREAK_DURATION) {
-                       return "DURÉE MAX ATTEINTE";
-                     }
-
-                     const timeLeft = elapsedBreakSeconds < minBreakDuration 
-                       ? minBreakDuration - elapsedBreakSeconds 
-                       : MAX_BREAK_DURATION - elapsedBreakSeconds;
-                       
-                     const m = Math.floor(timeLeft / 60);
-                     const s = timeLeft % 60;
-                     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                     if (!breakEndTimeActual) return "00:00"; 
+                     const diff = breakEndTimeActual.getTime() - currentTime.getTime(); 
+                     if (diff <= 0) return "00:00"; 
+                     const m = Math.floor(diff / 60000); 
+                     const s = Math.floor((diff % 60000) / 1000); 
+                     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`; 
                    })() : status === ServiceStatus.OFF ? (isTodayFinished ? (() => {
                      const [h1, m1] = todayShift!.start.split(':').map(Number);
                      const [h2, m2] = todayShift!.end.split(':').map(Number);
@@ -1797,19 +1486,48 @@ const App: React.FC = () => {
                 </>
               ) : (
                 <div className="space-y-3">
+                  {isSearchingResto && (
+                    <div className="p-4 rounded-[24px] bg-white/5 border border-white/10 flex items-center gap-3 animate-pulse">
+                      <div className="w-5 h-5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Recherche resto en cours...</p>
+                    </div>
+                  )}
+                  {mealSuggestion && (
+                    <div className="p-4 rounded-[24px] bg-indigo-600 border border-indigo-400 text-white animate-popIn shadow-lg shadow-indigo-500/20">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <Utensils size={16} />
+                          <div>
+                            <p className="text-[8px] font-black uppercase tracking-widest opacity-80 mb-0.5">🍴 Resto trouvé à {mealSuggestion.distanceMinutes} min !</p>
+                            <h4 className="text-sm font-black tracking-tight">{mealSuggestion.name}</h4>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/20 text-white text-[8px] font-black">
+                          <Star size={8} fill="currentColor" /> {mealSuggestion.rating}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-3">
+                        <p className="text-[9px] font-bold opacity-80">Ouvrir dans Waze/Maps ?</p>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${mealSuggestion.latitude},${mealSuggestion.longitude}`, '_blank')}
+                            className="px-3 py-1.5 rounded-lg bg-white text-indigo-600 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                          >
+                            Maps
+                          </button>
+                          <button 
+                            onClick={() => window.open(`https://waze.com/ul?ll=${mealSuggestion.latitude},${mealSuggestion.longitude}&navigate=yes`, '_blank')}
+                            className="px-3 py-1.5 rounded-lg bg-white text-indigo-600 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                          >
+                            Waze
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex gap-3 animate-slideUp">
                     <button onClick={handleModifyBreak} className="flex-1 py-5 rounded-[24px] bg-white/10 backdrop-blur-md border border-white/20 text-white font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 active:scale-95 transition-all">MODIFIER</button>
-                    <button 
-                      onClick={handleResume} 
-                      disabled={!canResume}
-                      className={`flex-[2] py-5 rounded-[24px] font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl ${
-                        canResume 
-                          ? 'bg-white text-amber-600' 
-                          : 'bg-white/20 text-white/40 cursor-not-allowed'
-                      }`}
-                    >
-                      <Zap size={18} fill="currentColor" /> Reprendre
-                    </button>
+                    <button onClick={handleResume} className="flex-[2] py-5 rounded-[24px] bg-white text-amber-600 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl"><Zap size={18} fill="currentColor" /> Reprendre</button>
                   </div>
                 </div>
               )}
@@ -1817,7 +1535,7 @@ const App: React.FC = () => {
           </div>
           <div className={`${bentoCardBase} col-span-2 min-h-[160px] flex flex-col group`}>
              <div className="flex-1 p-6 relative flex flex-col justify-between">
-                {workRegime === 'modulation' && periodStats.extraData ? (
+                {overtimeMode === 'modulation' && periodStats.extraData ? (
                   carouselIndex === 0 ? (
                     <div className="flex items-center justify-between animate-fadeIn">
                        <div className="flex items-center gap-4">
@@ -1897,7 +1615,7 @@ const App: React.FC = () => {
                    </div>
                 </div>
              </div>
-             {workRegime === 'modulation' && (
+             {overtimeMode === 'modulation' && (
                 <div className="pb-4 flex justify-center gap-2">
                    <div className={`w-1.5 h-1.5 rounded-full transition-all ${carouselIndex === 0 ? 'bg-indigo-500 w-4' : 'bg-slate-500/30'}`} />
                    <div className={`w-1.5 h-1.5 rounded-full transition-all ${carouselIndex === 1 ? 'bg-emerald-500 w-4' : 'bg-slate-500/30'}`} />
@@ -2036,7 +1754,7 @@ const App: React.FC = () => {
                     <input 
                       type="range" 
                       min="1" 
-                      max="90" 
+                      max="120" 
                       step="1" 
                       className="w-full h-2.5 bg-indigo-500/10 dark:bg-slate-800 rounded-full appearance-none cursor-pointer accent-indigo-500" 
                       value={breakDuration} 
@@ -2044,8 +1762,8 @@ const App: React.FC = () => {
                     />
                     <div className="flex justify-between mt-2 text-[8px] font-black text-slate-500 uppercase tracking-widest opacity-40">
                       <span>1m</span>
-                      <span>45m</span>
-                      <span>90m</span>
+                      <span>60m</span>
+                      <span>120m</span>
                     </div>
                   </div>
                 </div>
@@ -2080,11 +1798,47 @@ const App: React.FC = () => {
                   </div>
                 )}
 
+                {isSearchingResto && (
+                  <div className="flex flex-col items-center gap-3 py-4 animate-pulse">
+                    <div className="w-12 h-12 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
+                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Recherche d'un resto...</p>
+                  </div>
+                )}
+
+                {mealSuggestion && breakLocation === 'Extérieur' && (
+                  <div className="p-5 rounded-3xl bg-indigo-600/10 border border-indigo-500/20 space-y-4 animate-popIn">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center text-white">
+                        <Utensils size={20} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-black text-white">{mealSuggestion.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{mealSuggestion.distanceMinutes} min • {mealSuggestion.address}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${mealSuggestion.latitude},${mealSuggestion.longitude}`, '_blank')}
+                        className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                      >
+                        Google Maps
+                      </button>
+                      <button 
+                        onClick={() => window.open(`https://waze.com/ul?ll=${mealSuggestion.latitude},${mealSuggestion.longitude}&navigate=yes`, '_blank')}
+                        className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                      >
+                        Waze
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <button 
                   onClick={handleConfirmBreak} 
-                  className="w-full py-6 rounded-[28px] bg-indigo-600 text-white font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(79,70,229,0.3)] active:scale-95 transition-all flex items-center justify-center gap-3 border border-indigo-400/50"
+                  disabled={isSearchingResto}
+                  className="w-full py-6 rounded-[28px] bg-indigo-600 text-white font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(79,70,229,0.3)] active:scale-95 transition-all flex items-center justify-center gap-3 border border-indigo-400/50 disabled:opacity-50"
                 >
-                  <CheckCircle size={24} strokeWidth={3} /> CONFIRMER
+                  <CheckCircle size={24} strokeWidth={3} /> {mealSuggestion && breakLocation === 'Extérieur' ? 'TERMINER' : 'CONFIRMER'}
                 </button>
               </div>
             </div>
@@ -2094,202 +1848,145 @@ const App: React.FC = () => {
     );
   };
 
-  if (showSplash) {
-    return <SplashScreen onComplete={handleSplashComplete} />;
-  }
-
-  if (authLoading || configLoading || !isAuthReady) {
-    return (
-      <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center gap-4">
-        <div className="relative">
-          <div className="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 animate-pulse" />
-          <Loader2 className="relative text-indigo-500 animate-spin" size={48} />
-        </div>
-        <p className="text-slate-400 font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">Chargement du cockpit...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <AuthScreen onAuthSuccess={() => {}} />;
-  }
-
-  if (onboarded === false) {
-    return (
-      <div className="fixed inset-0 z-[100] bg-slate-950">
-        <Onboarding onComplete={(data: any) => { 
-          applyConfig(data);
-          setOnboarded(true);
-        }} />
-      </div>
-    );
-  }
-
   return (
-    <ErrorBoundary>
-      <div className={`min-h-screen transition-colors duration-500 font-sans pb-28 flex flex-col relative ${effectiveDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key="main-app"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1, ease: "easeInOut" }}
-            className="flex-1 flex flex-col"
-          >
-            <style>{`
-              @keyframes pulse-border {
-                0% { border-color: rgba(244, 63, 94, 0.3); box-shadow: 0 0 0px rgba(244, 63, 94, 0); }
-                50% { border-color: rgba(244, 63, 94, 1); box-shadow: 0 0 30px rgba(244, 63, 94, 0.6); }
-                100% { border-color: rgba(244, 63, 94, 0.3); box-shadow: 0 0 0px rgba(244, 63, 94, 0); }
-              }
-              .animate-pulse-border { animation: pulse-border 2s infinite; }
-              @keyframes slideUp { from { opacity: 0; transform: translateY(30px); filter: blur(10px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
-              .animate-slideUp { animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-              @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-              .animate-fadeIn { animation: fadeIn 0.8s ease-out forwards; }
-              @keyframes popIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-              .animate-popIn { animation: popIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-              @keyframes blink-red {
-                0%, 100% { color: #f43f5e; opacity: 1; }
-                50% { opacity: 0.7; }
-              }
-              .animate-blink-red { animation: blink-red 1s infinite; }
-            `}</style>
-            <div className="fixed top-0 left-0 right-0 z-[200] pointer-events-none">
-              <div className="flex flex-col gap-3 w-full max-w-md mx-auto px-6 pt-6">
-                {notifications.map(notify => (
-                  <PushNotification 
-                    key={notify.id} 
-                    notification={notify} 
-                    darkMode={effectiveDarkMode} 
-                    onClose={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
-                    onAction={(action) => {
-                    }}
-                  />
-                ))}
+    <div className={`min-h-screen transition-colors duration-500 font-sans pb-28 flex flex-col relative ${effectiveDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>
+      <style>{`
+        @keyframes pulse-border {
+          0% { border-color: rgba(244, 63, 94, 0.3); box-shadow: 0 0 0px rgba(244, 63, 94, 0); }
+          50% { border-color: rgba(244, 63, 94, 1); box-shadow: 0 0 30px rgba(244, 63, 94, 0.6); }
+          100% { border-color: rgba(244, 63, 94, 0.3); box-shadow: 0 0 0px rgba(244, 63, 94, 0); }
+        }
+        .animate-pulse-border { animation: pulse-border 2s infinite; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); filter: blur(10px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+        .animate-slideUp { animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fadeIn { animation: fadeIn 0.8s ease-out forwards; }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .animate-popIn { animation: popIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      `}</style>
+      <div className="fixed top-0 left-0 right-0 z-[200] pointer-events-none">
+        {notifications.map(notify => (
+          <PushNotification 
+            key={notify.id} 
+            notification={notify} 
+            darkMode={effectiveDarkMode} 
+            onClose={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
+            onAction={(action) => {
+              if (action === 'open_navigation') setIsNavigationModalOpen(true);
+            }}
+          />
+        ))}
+      </div>
+      {showOnboarding && <Onboarding darkMode={effectiveDarkMode} onComplete={(data: any) => { setShowOnboarding(false); setUserName(data.userName); if (data.profileImage) setProfileImage(data.profileImage); setJobTitle(data.jobTitle); setHourlyRate(data.hourlyRate); setCompanyName(data.companyName); setHasDea(data.hasDea); setHasAux(data.hasAux); setHasTaxiCard(data.hasTaxiCard); setPrimaryGraduationDate(data.primaryGraduationDate); setDeaDate(data.deaDate); setAuxDate(data.auxDate); setTaxiDate(data.taxiDate); setTaxiCardExpiryDate(data.taxiCardExpiryDate); setTaxiFpcDate(data.taxiFpcDate); setAfgsuDate(data.afgsuDate); setMedicalExpiryDate(data.medicalExpiryDate); setContractStartDate(data.contractStartDate); setHoursBase(data.hoursBase); setCpCalculationMode(data.cpCalculationMode); setInitialCpBalance(parseFloat(data.initialCpBalance || "0")); setOvertimeMode(data.overtimeMode); setModulationStartDate(data.modulationStartDate); setModulationWeeks(data.modulationWeeks); setPushEnabled(data.notifications); setAutoGeo(data.geo); }} />}
+      
+      {showDailyRecap && lastFinishedShift && (
+        <DailyRecap 
+          shift={lastFinishedShift}
+          userStats={userStats}
+          hourlyRate={effectiveHourlyRate}
+          onClose={() => setShowDailyRecap(false)}
+          darkMode={effectiveDarkMode}
+        />
+      )}
+
+      {mealSuggestion && (
+        <NavigationChoiceModal 
+          isOpen={isNavigationModalOpen}
+          onClose={() => setIsNavigationModalOpen(false)}
+          latitude={mealSuggestion.latitude}
+          longitude={mealSuggestion.longitude}
+          address={mealSuggestion.address}
+          name={mealSuggestion.name}
+          darkMode={effectiveDarkMode}
+        />
+      )}
+
+      {(() => {
+        const unreadCount = notifications.filter(n => !n.read).length;
+        return (
+          <header className={`sticky top-0 z-40 backdrop-blur-md px-6 pt-12 pb-6 transition-all bg-transparent border-none`}>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                {profileImage && (
+                  <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-indigo-500/20 shadow-lg" onClick={() => setActiveTab('profile')}>
+                    <img src={profileImage} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                )}
+                <div>
+                  <h1 className="text-2xl font-black tracking-tight">Bonjour, {userName.split(' ')[0] || "Ami"} 👋</h1>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">{companyName || "AmbuFlow"}</p>
+                </div>
+              </div>
+              <div 
+                onClick={() => {
+                  // Logic removed
+                }}
+                className={`p-3 rounded-2xl relative ${effectiveDarkMode ? 'bg-slate-800/50' : 'bg-slate-100/50'} backdrop-blur-md cursor-pointer`}
+              >
+                <Bell size={24} className={status !== ServiceStatus.OFF || nextAutoStart ? 'animate-bounce text-indigo-500' : ''} />
+                {unreadCount > 0 && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center border-2 border-slate-950">
+                     <span className="text-[8px] font-black text-white">{unreadCount}</span>
+                  </div>
+                )}
               </div>
             </div>
-            
-            {showDailyRecap && lastFinishedShift && (
-              <DailyRecap 
-                shift={lastFinishedShift}
-                userStats={userStats}
-                hourlyRate={effectiveHourlyRate}
-                onClose={() => setShowDailyRecap(false)}
-                darkMode={effectiveDarkMode}
-              />
-            )}
-
-            {(() => {
-              const unreadCount = notifications.filter(n => !n.read).length;
-              return (
-                <header className={`sticky top-0 z-40 backdrop-blur-md px-6 pt-12 pb-6 transition-all bg-transparent border-none`}>
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                      {profileImage && (
-                        <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-indigo-500/20 shadow-lg" onClick={() => setActiveTab('profile')}>
-                          <img src={profileImage} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        </div>
-                      )}
-                      <div>
-                        <h1 className="text-2xl font-black tracking-tight">Bonjour, {userName.split(' ')[0] || "Ami"} 👋</h1>
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">{companyName || "AmbuFlow"}</p>
-                      </div>
-                    </div>
-                    <div 
-                      onClick={() => {
-                        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-                      }}
-                      className={`p-3 rounded-2xl relative ${effectiveDarkMode ? 'bg-slate-800/50' : 'bg-slate-100/50'} backdrop-blur-md cursor-pointer`}
-                    >
-                      <Bell size={24} className={status !== ServiceStatus.OFF || nextAutoStart ? 'animate-bounce text-indigo-500' : ''} />
-                      {unreadCount > 0 && (
-                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center border-2 border-slate-950">
-                           <span className="text-[8px] font-black text-white">{unreadCount}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </header>
-              );
-            })()}
-            <main className="flex-1 max-w-xl mx-auto w-full">
-              {activeTab === 'home' && (
-                <BoardTab 
-                  darkMode={effectiveDarkMode}
-                  userName={userName}
-                  status={status}
-                  setStatus={setStatus}
-                  activeShift={shifts.find(s => s.id === activeShiftId) || null}
-                  onStartService={() => handleStartService()}
-                  onEndService={handleEndService}
-                  onToggleBreak={handleToggleBreak}
-                  shifts={shifts}
-                  logs={logs}
-                  userStats={userStats}
-                  hourlyRate={effectiveHourlyRate}
-                  onOpenAssistant={() => setShowAssistant(true)}
-                  modulationInfo={modulationInfo}
-                />
-              )}
-              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} onUpdateShifts={handleUpdateShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} modulationInfo={modulationInfo} />}
-              {activeTab === 'paie' && <PaieTab darkMode={effectiveDarkMode} hasTaxiCard={hasTaxiCard} hourlyRate={effectiveHourlyRate} hoursBase={hoursBase} workRegime={workRegime} shifts={shifts} cpCalculationMode={cpCalculationMode as '25' | '30'} />}
-              {activeTab === 'profile' && <ProfileTab 
-                darkMode={effectiveDarkMode} 
-                userName={userName} 
-                firstName={firstName}
-                lastName={lastName}
-                setUserName={setUserName}
-                profileImage={profileImage} 
-                setProfileImage={setProfileImage}
-                jobTitle={jobTitle} 
-                setJobTitle={setJobTitle}
-                companyName={companyName} 
-                setCompanyName={setCompanyName}
-                companyCity={companyCity}
-                setCompanyCity={setCompanyCity}
-                hourlyRate={hourlyRate}
-                effectiveHourlyRate={effectiveHourlyRate}
-                seniorityInfo={seniorityInfo}
-                setHourlyRate={setHourlyRate}
-                setContractStartDate={setContractStartDate}
-                shifts={shifts} 
-                logs={logs} 
-                followSystemTheme={followSystemTheme} 
-                setFollowSystemTheme={setFollowSystemTheme} 
-                userStats={userStats} 
-                onLogout={handleLogout} 
-                onResetData={handleResetData}
-                hasDea={hasDea}
-                hasAux={hasAux}
-                hasTaxiCard={hasTaxiCard}
-                contractStartDate={contractStartDate}
-                hoursBase={hoursBase}
-                setHoursBase={setHoursBase}
-                cpCalculationMode={cpCalculationMode as '25' | '30'}
-                setCpCalculationMode={(val) => setCpCalculationMode(val as any)}
-                initialCpBalance={initialCpBalance}
-                setInitialCpBalance={setInitialCpBalance}
-                workRegime={workRegime}
-                setWorkRegime={setWorkRegime}
-                modulationWeeks={modulationWeeks}
-                setModulationWeeks={setModulationWeeks}
-                pushEnabled={pushEnabled}
-                setPushEnabled={setPushEnabled}
-                autoGeo={autoGeo}
-                setAutoGeo={setAutoGeo}
-                afgsuDate={afgsuDate}
-                medicalExpiryDate={medicalExpiryDate}
-                taxiFpcDate={taxiFpcDate}
-                taxiCardExpiryDate={taxiCardExpiryDate}
-              />}
-            </main>
-            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} darkMode={effectiveDarkMode} />
-          </motion.div>
-        </AnimatePresence>
-      </div>
-    </ErrorBoundary>
+          </header>
+        );
+      })()}
+      <main className="flex-1 max-w-xl mx-auto w-full">
+        {activeTab === 'home' && renderHome()}
+        {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} setShifts={setShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} overtimeMode={overtimeMode} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}
+        {activeTab === 'paie' && <PaieTab logs={logs} darkMode={effectiveDarkMode} hasTaxiCard={hasTaxiCard} hourlyRate={effectiveHourlyRate} hoursBase={hoursBase} overtimeMode={overtimeMode} shifts={shifts} cpCalculationMode={cpCalculationMode as '25' | '30'} />}
+        {activeTab === 'profile' && <ProfileTab 
+          darkMode={effectiveDarkMode} 
+          userName={userName} 
+          profileImage={profileImage} 
+          setProfileImage={setProfileImage}
+          jobTitle={jobTitle} 
+          companyName={companyName} 
+          hourlyRate={hourlyRate}
+          effectiveHourlyRate={effectiveHourlyRate}
+          seniorityInfo={seniorityInfo}
+          setHourlyRate={setHourlyRate}
+          setContractStartDate={setContractStartDate}
+          shifts={shifts} 
+          logs={logs} 
+          followSystemTheme={followSystemTheme} 
+          setFollowSystemTheme={setFollowSystemTheme} 
+          userStats={userStats} 
+          onLogout={handleLogout} 
+          onResetData={handleResetData}
+          hasDea={hasDea}
+          hasAux={hasAux}
+          hasTaxiCard={hasTaxiCard}
+          primaryGraduationDate={primaryGraduationDate}
+          deaDate={deaDate}
+          auxDate={auxDate}
+          taxiDate={taxiDate}
+          taxiCardExpiryDate={taxiCardExpiryDate}
+          setTaxiCardExpiryDate={setTaxiCardExpiryDate}
+          taxiFpcDate={taxiFpcDate}
+          setTaxiFpcDate={setTaxiFpcDate}
+          afgsuDate={afgsuDate}
+          setAfgsuDate={setAfgsuDate}
+          medicalExpiryDate={medicalExpiryDate}
+          setMedicalExpiryDate={setMedicalExpiryDate}
+          contractStartDate={contractStartDate}
+          hoursBase={hoursBase}
+          cpCalculationMode={cpCalculationMode as '25' | '30'}
+          setCpCalculationMode={(val) => setCpCalculationMode(val as any)}
+          initialCpBalance={initialCpBalance}
+          setInitialCpBalance={setInitialCpBalance}
+          overtimeMode={overtimeMode}
+          pushEnabled={pushEnabled}
+          setPushEnabled={setPushEnabled}
+          autoGeo={autoGeo}
+          setAutoGeo={setAutoGeo}
+        />}
+      </main>
+      <Navigation activeTab={activeTab} setActiveTab={setActiveTab} darkMode={effectiveDarkMode} />
+    </div>
   );
 };
 export default App;

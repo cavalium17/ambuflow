@@ -36,17 +36,10 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 interface ProfileTabProps {
   darkMode: boolean;
   userName: string;
-  firstName?: string;
-  lastName?: string;
-  setUserName: (val: string) => void;
   profileImage: string | null;
   setProfileImage: (val: string | null) => void;
   jobTitle: string;
-  setJobTitle: (val: string) => void;
   companyName: string;
-  setCompanyName: (val: string) => void;
-  companyCity?: string;
-  setCompanyCity?: (val: string) => void;
   hourlyRate: string;
   effectiveHourlyRate?: string;
   seniorityInfo?: { years: number; months: number; bonus: number; text: string };
@@ -62,41 +55,38 @@ interface ProfileTabProps {
   hasDea?: boolean;
   hasAux?: boolean;
   hasTaxiCard?: boolean;
+  primaryGraduationDate?: string;
+  deaDate?: string;
+  auxDate?: string;
+  taxiDate?: string;
+  taxiCardExpiryDate?: string;
+  setTaxiCardExpiryDate?: (val: string) => void;
+  taxiFpcDate?: string;
+  setTaxiFpcDate?: (val: string) => void;
+  afgsuDate?: string;
+  setAfgsuDate?: (val: string) => void;
+  medicalExpiryDate?: string;
+  setMedicalExpiryDate?: (val: string) => void;
   contractStartDate?: string;
-  workRegime?: string;
-  setWorkRegime?: (val: string) => void;
-  modulationWeeks?: string;
-  setModulationWeeks?: (val: string) => void;
   hoursBase?: string;
-  setHoursBase?: (val: string) => void;
   cpCalculationMode?: '25' | '30';
   setCpCalculationMode?: (val: string) => void;
   initialCpBalance: number;
   setInitialCpBalance: (val: number) => void;
+  overtimeMode?: string;
   pushEnabled: boolean;
   setPushEnabled: (val: boolean) => void;
   autoGeo: boolean;
   setAutoGeo: (val: boolean) => void;
-  afgsuDate?: string;
-  medicalExpiryDate?: string;
-  taxiFpcDate?: string;
-  taxiCardExpiryDate?: string;
 }
 
 const ProfileTab: React.FC<ProfileTabProps> = ({
   darkMode,
   userName,
-  firstName = "",
-  lastName = "",
-  setUserName,
   profileImage,
   setProfileImage,
   jobTitle,
-  setJobTitle,
   companyName,
-  setCompanyName,
-  companyCity = "",
-  setCompanyCity,
   hourlyRate,
   effectiveHourlyRate,
   seniorityInfo,
@@ -110,25 +100,29 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   hasDea = false,
   hasAux = false,
   hasTaxiCard = false,
+  primaryGraduationDate = "",
+  deaDate = "",
+  auxDate = "",
+  taxiDate = "",
+  taxiCardExpiryDate = "",
+  setTaxiCardExpiryDate,
+  taxiFpcDate = "",
+  setTaxiFpcDate,
+  afgsuDate = "",
+  setAfgsuDate,
+  medicalExpiryDate = "",
+  setMedicalExpiryDate,
   contractStartDate = "",
-  workRegime = "weekly",
-  setWorkRegime,
-  modulationWeeks = "4",
-  setModulationWeeks,
   hoursBase = "35",
-  setHoursBase,
   cpCalculationMode = "25",
   setCpCalculationMode,
   initialCpBalance,
   setInitialCpBalance,
+  overtimeMode = "weekly",
   pushEnabled,
   setPushEnabled,
   autoGeo,
-  setAutoGeo,
-  afgsuDate = "",
-  medicalExpiryDate = "",
-  taxiFpcDate = "",
-  taxiCardExpiryDate = ""
+  setAutoGeo
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -154,6 +148,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       localStorage.setItem('ambuflow_profile_image', downloadURL);
     } catch (error) {
       console.error("Error uploading image:", error);
+      alert("Erreur lors de l'envoi de l'image. Veuillez réessayer.");
     } finally {
       setIsUploading(false);
     }
@@ -163,7 +158,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
     darkMode ? 'bg-slate-900/60 border-white/5' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/40'
   } backdrop-blur-xl`;
 
-  const workRegimeLabels: Record<string, string> = {
+  const overtimeLabels: Record<string, string> = {
     weekly: 'Hebdomadaire',
     fortnightly: 'Quinzaine',
     modulation: 'Modulation',
@@ -266,140 +261,325 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             className="hidden" 
           />
         </div>
-
-        <div className="w-full space-y-4">
-          <div className="space-y-1">
-            <h2 className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-              {firstName || lastName ? `${firstName} ${lastName}`.trim() : "Utilisateur"}
-            </h2>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{jobTitle}</p>
-          </div>
-
-          {/* Badges Diplômes */}
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            {hasDea && (
-              <span className="px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/5">DEA</span>
-            )}
-            {hasAux && (
-              <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/5">AUX</span>
-            )}
-            {hasTaxiCard && (
-              <span className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/5">TAXI</span>
-            )}
-          </div>
+        <h2 className="text-3xl font-black tracking-tighter mb-1">{userName || "Ambulancier"}</h2>
+        <div className="flex items-center gap-2 mb-4 flex-wrap justify-center">
+          <div className="px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-500 text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">{jobTitle}</div>
+        </div>
+        <div className="flex items-center gap-2 text-slate-400"><Building2 size={16} /><span className="text-sm font-bold">{companyName || "Société d'AmbuFlow"}</span></div>
+        <div className="mt-4 px-4 py-2 rounded-2xl bg-slate-500/5 border border-white/5 flex items-center gap-2">
+          <CalendarDays size={14} className="text-indigo-400" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ancienneté : {seniorityText}</span>
+          <span className="text-[10px] font-black text-emerald-500 ml-1">({seniorityBonus})</span>
         </div>
       </div>
 
-      {/* SECTION CONTRAT */}
+      {/* CHECKLIST CONFORMITÉ */}
       <div className={`${bentoCardBase} p-8`}>
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2"><FileText size={16} /> Section Contrat</h3>
-        
-        <div className="space-y-6">
-          <div className="flex flex-col gap-1">
-            <p className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-              En poste chez <span className="text-indigo-500 font-black uppercase tracking-tight">{companyName || '...'}</span>
-            </p>
-            <p className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-              depuis le <span className="text-amber-500 font-black">{formatDate(contractStartDate)}</span>
-            </p>
-          </div>
-
-          <div className="h-px bg-white/5 w-full" />
-
-          <div className="grid grid-cols-1 gap-4">
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
-              <div className="flex items-center gap-3">
-                <Zap size={16} className="text-indigo-500" />
-                <span className="text-xs font-black uppercase tracking-widest text-slate-400">Régime</span>
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2"><ShieldCheck size={16} /> Checklist Conformité</h3>
+        <div className="space-y-3">
+          {complianceItems.map((item, idx) => {
+            const isOk = item.status === 'ok';
+            const isWarning = item.status === 'warning';
+            const isExpired = item.status === 'expired';
+            
+            return (
+              <div key={idx} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                isOk ? 'bg-emerald-500/5 border-emerald-500/10' : 
+                isWarning ? 'bg-amber-500/5 border-amber-500/10' : 
+                'bg-rose-500/5 border-rose-500/10'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl ${
+                    isOk ? 'bg-emerald-500 text-white' : 
+                    isWarning ? 'bg-amber-500 text-white' : 
+                    'bg-rose-500 text-white'
+                  }`}>
+                    {isOk ? <Award size={16} /> : <ShieldAlert size={16} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className={`text-sm font-bold ${
+                      isOk ? (darkMode ? 'text-white' : 'text-slate-900') : 
+                      isWarning ? 'text-amber-500' : 
+                      'text-rose-500'
+                    }`}>{item.label}</span>
+                    {item.date && (
+                      <span className="text-[9px] font-bold opacity-60 uppercase tracking-widest">
+                        {isExpired ? 'Expiré le ' : 'Expire le '} {formatDate(item.date.toISOString())}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {isOk ? (
+                  <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                    <Star size={12} strokeWidth={3} />
+                  </div>
+                ) : (
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-black text-[10px] ${
+                    isWarning ? 'bg-amber-500' : 'bg-rose-500'
+                  }`}>!</div>
+                )}
               </div>
-              <span className="text-sm font-black text-white">
-                {workRegimeLabels[workRegime] || workRegime}
-                {workRegime === 'modulation' && ` ${modulationWeeks} semaines`}
-              </span>
-            </div>
+            );
+          })}
+        </div>
+      </div>
 
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
-              <div className="flex items-center gap-3">
-                <Euro size={16} className="text-emerald-500" />
-                <span className="text-xs font-black uppercase tracking-widest text-slate-400">Taux horaire</span>
+      {/* DÉTAILS DU CONTRAT */}
+      <div className={`${bentoCardBase} p-8`}>
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2"><FileText size={16} /> Détails du Contrat</h3>
+        <div className="grid grid-cols-1 gap-4">
+          <div className="flex flex-col gap-3 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3"><Euro size={16} className="text-indigo-500" /><span className="text-sm font-bold">Taux Horaire</span></div>
+              <div className="text-right">
+                <div className="flex items-center gap-2 justify-end">
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    className="bg-transparent text-sm font-black text-indigo-500 outline-none text-right w-20"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate?.(e.target.value)}
+                  />
+                  <span className="text-[10px] font-bold text-slate-500">€/h</span>
+                </div>
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Base (Niveau 3)</p>
               </div>
-              <span className="text-sm font-black text-emerald-500">{hourlyRate}€/h</span>
             </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
-            <div className="flex justify-between items-center">
+            <div className="pt-3 border-t border-white/5 flex justify-between items-center">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Majoration Ancienneté ({seniorityBonus})</span>
-              <span className="text-sm font-black text-indigo-400">{effectiveHourlyRate} €/h</span>
+              <span className="text-xs font-black text-emerald-500">{effectiveHourlyRate} €/h</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+            <div className="flex items-center gap-3"><Clock size={16} className="text-indigo-500" /><span className="text-sm font-bold">Base Horaire</span></div>
+            <span className="text-xs font-black text-indigo-500">{hoursBase}h / semaine</span>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+            <div className="flex items-center gap-3"><Zap size={16} className="text-emerald-500" /><span className="text-sm font-bold">Gestion des heures</span></div>
+            <span className="text-xs font-black text-emerald-500">{overtimeLabels[overtimeMode] || overtimeMode}</span>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+            <div className="flex items-center gap-3"><CalendarDays size={16} className="text-amber-500" /><span className="text-sm font-bold">Entrée Entreprise</span></div>
+            <input 
+              type="date" 
+              className="bg-transparent text-xs font-black text-amber-500 outline-none text-right"
+              value={contractStartDate}
+              onChange={(e) => setContractStartDate?.(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-3 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3"><Calendar size={16} className="text-emerald-500" /><span className="text-sm font-bold">Base Congés (CP)</span></div>
+              <div className="flex items-center gap-1 bg-slate-900 rounded-lg p-0.5">
+                <button 
+                  onClick={() => setCpCalculationMode?.('25')}
+                  className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${cpCalculationMode === '25' ? 'bg-emerald-500 text-white' : 'text-slate-500'}`}
+                >25j</button>
+                <button 
+                  onClick={() => setCpCalculationMode?.('30')}
+                  className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${cpCalculationMode === '30' ? 'bg-emerald-500 text-white' : 'text-slate-500'}`}
+                >30j</button>
+              </div>
+            </div>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-center">
+              {cpCalculationMode === '25' ? '2.08j / mois (Ouvrés)' : '2.5j / mois (Ouvrables)'}
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1">
+            <div className="flex flex-col gap-2 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Solde CP Initial</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number" 
+                  step="0.5"
+                  className="bg-transparent text-sm font-black text-emerald-500 outline-none w-full"
+                  value={initialCpBalance}
+                  onChange={(e) => setInitialCpBalance(parseFloat(e.target.value) || 0)}
+                />
+                <span className="text-[10px] font-bold text-slate-500">j</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* SECTION PARAMÈTRES */}
+      {/* QUALIFICATIONS ACTIVES */}
       <div className={`${bentoCardBase} p-8`}>
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2"><Settings size={16} /> Section Paramètres</h3>
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2"><FileBadge size={16} /> Qualifications & Diplômes</h3>
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-slate-500/5 border border-white/5 flex flex-col gap-3">
+             <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3"><FileBadge size={18} className="text-indigo-500" /><span className="text-sm font-bold">{jobTitle} (Principal)</span></div>
+                <span className="text-[9px] font-black text-indigo-500 uppercase">Actif</span>
+             </div>
+             <div className="flex items-center gap-2 text-slate-500 text-[10px] font-bold">
+                <Calendar size={12} />
+                <span>Obtenu le {formatDate(primaryGraduationDate)}</span>
+             </div>
+          </div>
+
+          {hasDea && jobTitle !== 'Ambulancier DE' && jobTitle !== 'Auxiliaire ambulancier' && (
+            <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3"><ShieldCheck size={18} className="text-emerald-500" /><span className="text-sm font-bold">Diplôme d'État (DEA)</span></div>
+                <span className="text-[9px] font-black text-emerald-500 uppercase">Certifié</span>
+              </div>
+              <div className="flex items-center gap-2 text-emerald-500/60 text-[10px] font-bold">
+                <Calendar size={12} />
+                <span>Obtenu le {formatDate(deaDate)}</span>
+              </div>
+            </div>
+          )}
+
+          {hasTaxiCard && jobTitle !== 'Chauffeur taxi' && (
+            <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3"><Car size={18} className="text-blue-500" /><span className="text-sm font-bold">Carte Pro Taxi</span></div>
+                <span className="text-[9px] font-black text-blue-500 uppercase">Valide</span>
+              </div>
+              <div className="flex items-center gap-2 text-blue-500/60 text-[10px] font-bold">
+                <Calendar size={12} />
+                <span>Obtenu le {formatDate(taxiDate)}</span>
+              </div>
+            </div>
+          )}
+
+          {hasAux && jobTitle !== 'Auxiliaire ambulancier' && jobTitle !== 'Ambulancier DE' && (
+            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3"><Users size={18} className="text-amber-500" /><span className="text-sm font-bold">Certificat Auxiliaire</span></div>
+                <span className="text-[9px] font-black text-amber-500 uppercase">Actif</span>
+              </div>
+              <div className="flex items-center gap-2 text-amber-500/60 text-[10px] font-bold">
+                <Calendar size={12} />
+                <span>Obtenu le {formatDate(auxDate)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* AFGSU 2 */}
+          <div className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all ${
+            afgsuDate ? 'bg-indigo-500/5 border-indigo-500/10' : 'bg-rose-500/5 border-rose-500/10'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ShieldCheck size={18} className={afgsuDate ? 'text-indigo-500' : 'text-rose-500'} />
+                <span className="text-sm font-bold">AFGSU 2</span>
+              </div>
+              <input 
+                type="date" 
+                className="bg-transparent text-[10px] font-black text-indigo-500 outline-none text-right"
+                value={afgsuDate}
+                onChange={(e) => setAfgsuDate?.(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-bold">
+              <span className="text-slate-500 uppercase tracking-widest">Dernier recyclage (4 ans)</span>
+              {afgsuDate && (
+                <span className="text-indigo-400">Expire le {formatDate(new Date(new Date(afgsuDate).setFullYear(new Date(afgsuDate).getFullYear() + 4)).toISOString())}</span>
+              )}
+            </div>
+          </div>
+
+          {/* MEDICAL */}
+          <div className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all ${
+            medicalExpiryDate ? 'bg-indigo-500/5 border-indigo-500/10' : 'bg-rose-500/5 border-rose-500/10'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Clock size={18} className={medicalExpiryDate ? 'text-indigo-500' : 'text-rose-500'} />
+                <span className="text-sm font-bold uppercase tracking-tight">Aptitude Préfectorale</span>
+              </div>
+              <input 
+                type="date" 
+                className="bg-transparent text-[10px] font-black text-indigo-500 outline-none text-right"
+                value={medicalExpiryDate}
+                onChange={(e) => setMedicalExpiryDate?.(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-bold">
+              <span className="text-slate-500 uppercase tracking-widest">Date de visite (5 ans)</span>
+              {medicalExpiryDate && (
+                <span className="text-indigo-400">Expire le {formatDate(new Date(new Date(medicalExpiryDate).setFullYear(new Date(medicalExpiryDate).getFullYear() + 5)).toISOString())}</span>
+              )}
+            </div>
+          </div>
+
+          {/* TAXI CARTE PRO & FPC */}
+          {hasTaxiCard && (
+            <>
+              <div className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all ${
+                taxiCardExpiryDate ? 'bg-indigo-500/5 border-indigo-500/10' : 'bg-rose-500/5 border-rose-500/10'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Car size={18} className={taxiCardExpiryDate ? 'text-indigo-500' : 'text-rose-500'} />
+                    <span className="text-sm font-bold">Carte Pro Taxi</span>
+                  </div>
+                  <input 
+                    type="date" 
+                    className="bg-transparent text-[10px] font-black text-indigo-500 outline-none text-right"
+                    value={taxiCardExpiryDate}
+                    onChange={(e) => setTaxiCardExpiryDate?.(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[9px] font-bold">
+                  <span className="text-slate-500 uppercase tracking-widest">Date d'expiration</span>
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-2xl border flex flex-col gap-3 transition-all ${
+                taxiFpcDate ? 'bg-indigo-500/5 border-indigo-500/10' : 'bg-rose-500/5 border-rose-500/10'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <RefreshCw size={18} className={taxiFpcDate ? 'text-indigo-500' : 'text-rose-500'} />
+                    <span className="text-sm font-bold">FPC Taxi</span>
+                  </div>
+                  <input 
+                    type="date" 
+                    className="bg-transparent text-[10px] font-black text-indigo-500 outline-none text-right"
+                    value={taxiFpcDate}
+                    onChange={(e) => setTaxiFpcDate?.(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[9px] font-bold">
+                  <span className="text-slate-500 uppercase tracking-widest">Dernier stage (5 ans)</span>
+                  {taxiFpcDate && (
+                    <span className="text-indigo-400">Expire le {formatDate(new Date(new Date(taxiFpcDate).setFullYear(new Date(taxiFpcDate).getFullYear() + 5)).toISOString())}</span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* RÉGLAGES APP */}
+      <div className={`${bentoCardBase} p-8`}>
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2"><Settings size={16} /> Réglages Application</h3>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
-                {darkMode ? <Moon size={18} /> : <Sun size={18} />}
-              </div>
-              <span className="text-sm font-bold">Thème automatique</span>
-            </div>
-            <button 
-              onClick={() => setFollowSystemTheme(!followSystemTheme)} 
-              className={`w-12 h-6 rounded-full relative transition-all ${followSystemTheme ? 'bg-indigo-600' : 'bg-slate-700'}`}
-            >
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${followSystemTheme ? 'left-7' : 'left-1'}`} />
-            </button>
+            <div className="flex items-center gap-3"><div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">{darkMode ? <Moon size={18} /> : <Sun size={18} />}</div><span className="text-sm font-bold">Thème automatique</span></div>
+            <button onClick={() => setFollowSystemTheme(!followSystemTheme)} className={`w-12 h-6 rounded-full relative transition-all ${followSystemTheme ? 'bg-indigo-600' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${followSystemTheme ? 'left-7' : 'left-1'}`} /></button>
           </div>
-
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
-                <Bell size={18} />
-              </div>
-              <span className="text-sm font-bold">Notifications Push</span>
-            </div>
-            <button 
-              onClick={() => setPushEnabled(!pushEnabled)} 
-              className={`w-12 h-6 rounded-full relative transition-all ${pushEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}
-            >
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${pushEnabled ? 'left-7' : 'left-1'}`} />
-            </button>
+            <div className="flex items-center gap-3"><div className="p-2 rounded-xl bg-amber-500/10 text-amber-500"><Bell size={18} /></div><span className="text-sm font-bold">Notifications Push</span></div>
+            <button onClick={() => setPushEnabled(!pushEnabled)} className={`w-12 h-6 rounded-full relative transition-all ${pushEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${pushEnabled ? 'left-7' : 'left-1'}`} /></button>
           </div>
-
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-violet-500/10 text-violet-500">
-                <MapPin size={18} />
-              </div>
-              <span className="text-sm font-bold">Géolocalisation Auto</span>
-            </div>
-            <button 
-              onClick={() => setAutoGeo(!autoGeo)} 
-              className={`w-12 h-6 rounded-full relative transition-all ${autoGeo ? 'bg-indigo-600' : 'bg-slate-700'}`}
-            >
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${autoGeo ? 'left-7' : 'left-1'}`} />
-            </button>
-          </div>
-
-          <div className="pt-6 border-t border-white/5">
-            <button 
-              onClick={onResetData} 
-              className="w-full p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center gap-3 group active:scale-[0.98] transition-all"
-            >
-              <Trash2 size={18} className="text-rose-500" />
-              <span className="font-black uppercase tracking-widest text-[10px] text-rose-500">Effacer toutes les données</span>
-            </button>
+            <div className="flex items-center gap-3"><div className="p-2 rounded-xl bg-violet-500/10 text-violet-500"><MapPin size={18} /></div><span className="text-sm font-bold">Géolocalisation Auto</span></div>
+            <button onClick={() => setAutoGeo(!autoGeo)} className={`w-12 h-6 rounded-full relative transition-all ${autoGeo ? 'bg-indigo-600' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${autoGeo ? 'left-7' : 'left-1'}`} /></button>
           </div>
         </div>
       </div>
 
       {/* ACTIONS */}
       <div className="space-y-4">
-        <button onClick={onLogout} className={`${bentoCardBase} w-full p-6 flex items-center justify-between group active:scale-[0.98]`}><div className="flex items-center gap-4"><div className="p-3 rounded-2xl bg-slate-500/10 text-slate-500"><LogOut size={20} /></div><span className="font-black uppercase tracking-widest text-xs">Fermer la session</span></div><ChevronRight size={20} className="text-slate-500" /></button>
+        <button onClick={onLogout} className={`${bentoCardBase} w-full p-6 flex items-center justify-between group active:scale-[0.98]`}><div className="flex items-center gap-4"><div className="p-3 rounded-2xl bg-rose-500/10 text-rose-500"><LogOut size={20} /></div><span className="font-black uppercase tracking-widest text-xs">Fermer la session</span></div><ChevronRight size={20} className="text-slate-500" /></button>
+        <button onClick={onResetData} className={`${bentoCardBase} w-full p-6 flex items-center justify-between group active:scale-[0.98] border-rose-500/20`}><div className="flex items-center gap-4"><div className="p-3 rounded-2xl bg-rose-500/10 text-rose-500"><Trash2 size={20} /></div><span className="font-black uppercase tracking-widest text-xs text-rose-500">Effacer les données</span></div></button>
       </div>
     </div>
   );

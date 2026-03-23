@@ -61,5 +61,4 @@ export interface PushNotification {
   timestamp: Date;
   url?: string;
   action?: 'open_navigation';
-  read?: boolean;
 }
