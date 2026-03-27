@@ -168,7 +168,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     isActive: false,
     type: 'repas',
     start: '12:00',
-    duration: 45,
+    duration: 30,
     location: 'Entreprise'
   });
 
@@ -567,7 +567,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
         <div className="space-y-6 animate-slideUp">
           <div className={`${bentoCardBase(false)} p-5 shadow-2xl`}>
             <div className="grid grid-cols-7 mb-4 border-b border-slate-500/5 pb-4">
-              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(day => (<div key={day} className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">{day}</div>))}
+              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, idx) => (<div key={idx} className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">{day}</div>))}
             </div>
             <div className="grid grid-cols-7 gap-y-2">
               {monthDays.map((day, idx) => {
@@ -576,10 +576,34 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                 const isSelected = dStr === selectedDay;
                 const dayShifts = getDayShifts(dStr);
                 const hasShifts = dayShifts.length > 0;
+                const hasCP = dayShifts.some(s => s.isLeave && (s.leaveType === 'CP' || s.leaveType === 'Congés Payés' || s.leaveType === 'Congé' || s.vehicle === 'CONGÉ'));
+                const hasWork = dayShifts.some(s => !s.isLeave && s.vehicle !== 'CONGÉ');
+
                 return (
-                  <button key={idx} onClick={() => setSelectedDay(dStr)} className={`relative aspect-square flex items-center justify-center text-xs font-black transition-all rounded-xl ${isSelected ? 'bg-indigo-600 text-white shadow-xl scale-110 z-10' : isToday ? 'text-indigo-600 ring-2 ring-indigo-500/20' : hasShifts ? (darkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') : 'text-slate-400 hover:bg-slate-500/5'}`}>
+                  <button 
+                    key={idx} 
+                    onClick={() => setSelectedDay(dStr)} 
+                    className={`relative aspect-square flex items-center justify-center text-xs font-black transition-all rounded-xl ${
+                      isSelected 
+                        ? (hasCP ? 'bg-orange-600 text-white shadow-xl scale-110 z-10 ring-2 ring-white/30' : 'bg-indigo-600 text-white shadow-xl scale-110 z-10')
+                        : hasCP
+                          ? 'bg-orange-500 text-white shadow-md'
+                          : isToday 
+                            ? 'text-indigo-600 ring-2 ring-indigo-500/20' 
+                            : hasWork 
+                              ? (darkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') 
+                              : 'text-slate-400 hover:bg-slate-500/5'
+                    }`}
+                  >
                     {day.getDate()}
-                    {hasShifts && !isSelected && <div className="absolute bottom-1 w-0.5 h-0.5 bg-indigo-500 rounded-full" />}
+                    <div className="absolute bottom-1.5 flex gap-0.5">
+                      {hasWork && !isSelected && !hasCP && (
+                        <div className="w-1 h-1 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                      )}
+                      {hasCP && !isSelected && (
+                        <div className="w-1 h-1 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -737,13 +761,13 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                       {!tempBreak.isActive ? (
                         <div className="grid grid-cols-2 gap-3">
                           <button 
-                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'cafe', duration: 15, start: '10:00' })}
+                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'cafe', duration: 20, start: '10:00' })}
                             className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
                           >
                             <Coffee size={14} /> Pause Café
                           </button>
                           <button 
-                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 45, start: '12:00' })}
+                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 30, start: '12:00' })}
                             className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
                           >
                             <Utensils size={14} /> Coupure Repas
@@ -775,7 +799,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                               <input 
                                 type="range" 
                                 min="1" 
-                                max="60" 
+                                max="90" 
                                 className="w-full h-1.5 bg-slate-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
                                 value={tempBreak.duration} 
                                 onChange={e => setTempBreak({ ...tempBreak, duration: parseInt(e.target.value) })} 

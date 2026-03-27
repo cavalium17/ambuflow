@@ -185,13 +185,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, darkMode = false })
             {step === 1 && (
               <div className="space-y-8 text-center">
                 <div className="relative inline-block">
-                  <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 animate-pulse" />
-                  <div className="relative w-28 h-28 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-[36px] mx-auto flex items-center justify-center shadow-2xl border border-white/20 backdrop-blur-xl">
-                    <Sparkles className="text-white" size={56} />
-                  </div>
+                  <div className="absolute inset-0 bg-indigo-500 blur-3xl opacity-30 animate-pulse" />
+                  <img 
+                    src="/pwa-512x512.png" 
+                    className="relative w-64 mx-auto drop-shadow-2xl" 
+                    alt="AmbuFlow Logo" 
+                    referrerPolicy="no-referrer" 
+                  />
                 </div>
                 <div className="space-y-4">
-                  <h1 className="text-5xl font-black tracking-tighter text-white drop-shadow-2xl text-center leading-[0.9]">Bienvenue sur <span className="text-indigo-400">AmbuFlow</span></h1>
                   <p className="text-slate-200 text-lg font-medium leading-relaxed drop-shadow-lg px-4">Pilotez votre activité, gérez vos pointages et suivez vos revenus avec l'intelligence de demain.</p>
                 </div>
               </div>
