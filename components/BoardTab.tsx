@@ -95,25 +95,7 @@ const BoardTab: React.FC<BoardTabProps> = ({
           {/* --- MODIFICATION ICI : AJOUT DE L'ANIMATION SUR LA MAIN --- */}
           <h1 className={`text-3xl font-black tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>
             Salut, {userName.split(' ')[0]} 
-            <motion.span
-  className="ml-2"
-  style={{ 
-    display: 'inline-block', // Indispensable pour la rotation
-    transformOrigin: '70% 80%', // Centre le mouvement sur le bas de la main
-    cursor: 'default'
-  }}
-  animate={{ 
-    rotate: [0, 15, -10, 15, 0], // Le mouvement de coucou
-  }}
-  transition={{ 
-    duration: 1.5,
-    repeat: Infinity,
-    repeatDelay: 2, // Pause de 2 secondes entre chaque salut
-    ease: "easeInOut"
-  }}
->
-  👋
-</motion.span>
+            <span className="inline-block ml-2 animate-bounce">👋</span>
           </h1>
           {/* ----------------------------------------------------------- */}
           
