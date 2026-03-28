@@ -96,19 +96,23 @@ const BoardTab: React.FC<BoardTabProps> = ({
           <h1 className={`text-3xl font-black tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>
             Salut, {userName.split(' ')[0]} 
             <motion.span
-              className="inline-block ml-1" // Important pour que la rotation fonctionne bien
-              initial={{ rotate: 0 }}
-              animate={{ rotate: [0, 20, 0, 20, 0] }} // Animation de "coucou"
-              transition={{ 
-                duration: 1.2, // Durée de l'animation
-                delay: 0.5, // Petit délai après le chargement
-                ease: "easeInOut",
-                repeatDelay: 5, // Relancer l'animation toutes les 5 secondes
-                repeat: Infinity // Tourner en boucle
-              }}
-            >
-              👋
-            </motion.span>
+  className="ml-2"
+  style={{ 
+    display: 'inline-block', 
+    transformOrigin: '70% 70%' // Fixe le point de pivot au niveau du poignet
+  }}
+  animate={{ 
+    rotate: [0, 15, -10, 15, 0] // Mouvement de balancier plus naturel
+  }}
+  transition={{ 
+    duration: 1.5,
+    repeat: Infinity,
+    repeatDelay: 3, // Attend 3 secondes entre chaque salut
+    ease: "easeInOut"
+  }}
+>
+  👋
+</motion.span>
           </h1>
           {/* ----------------------------------------------------------- */}
           
