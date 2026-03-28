@@ -98,16 +98,17 @@ const BoardTab: React.FC<BoardTabProps> = ({
             <motion.span
   className="ml-2"
   style={{ 
-    display: 'inline-block', 
-    transformOrigin: '70% 70%' // Fixe le point de pivot au niveau du poignet
+    display: 'inline-block', // Indispensable pour la rotation
+    transformOrigin: '70% 80%', // Centre le mouvement sur le bas de la main
+    cursor: 'default'
   }}
   animate={{ 
-    rotate: [0, 15, -10, 15, 0] // Mouvement de balancier plus naturel
+    rotate: [0, 15, -10, 15, 0], // Le mouvement de coucou
   }}
   transition={{ 
     duration: 1.5,
     repeat: Infinity,
-    repeatDelay: 3, // Attend 3 secondes entre chaque salut
+    repeatDelay: 2, // Pause de 2 secondes entre chaque salut
     ease: "easeInOut"
   }}
 >
