@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion'; // AnimatePresence ajouté ici
 import { 
   Clock, 
   Play, 
@@ -13,7 +13,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Shift, ServiceStatus, ActivityLog, UserStats, ModulationStats } from '../types';
-import { useModulation } from '../hooks/useModulation'; // Import de ton nouveau hook
+import { useModulation } from '../hooks/useModulation';
 
 interface BoardTabProps {
   darkMode: boolean;
@@ -29,7 +29,6 @@ interface BoardTabProps {
   userStats: UserStats;
   hourlyRate: string;
   onOpenAssistant: () => void;
-  // Utilisation de l'interface propre définie dans types.ts
   modulationInfo?: ModulationStats | null; 
 }
 
@@ -45,12 +44,7 @@ const BoardTab: React.FC<BoardTabProps> = ({
   userStats,
   onOpenAssistant,
 }) => {
-  // 1. Calcul dynamique de la modulation basé sur les préférences utilisateur
-  const modulation = useModulation(
-    shifts, 
-    userStats.modulationAnchorDate, 
-    userStats.modulationCycleWeeks
-  );
+  const modulation = useModulation(shifts, userStats.modulationAnchorDate, userStats.modulationCycleWeeks);
 
   const today = new Date().toISOString().split('T')[0];
   
@@ -59,7 +53,6 @@ const BoardTab: React.FC<BoardTabProps> = ({
     [shifts, today]
   );
 
-  // 2. Calcul des heures de la semaine (Lundi à Dimanche)
   const weeklyHours = useMemo(() => {
     const now = new Date();
     const dayOfWeek = (now.getDay() + 6) % 7; 
@@ -98,16 +91,35 @@ const BoardTab: React.FC<BoardTabProps> = ({
       <div className="flex items-center justify-between px-1">
         <div>
           <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">Tableau de Bord</p>
+          
+          {/* --- MODIFICATION ICI : AJOUT DE L'ANIMATION SUR LA MAIN --- */}
           <h1 className={`text-3xl font-black tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-            Salut, {userName.split(' ')[0]} 👋
+            Salut, {userName.split(' ')[0]} 
+            <motion.span
+              className="inline-block ml-1" // Important pour que la rotation fonctionne bien
+              initial={{ rotate: 0 }}
+              animate={{ rotate: [0, 20, 0, 20, 0] }} // Animation de "coucou"
+              transition={{ 
+                duration: 1.2, // Durée de l'animation
+                delay: 0.5, // Petit délai après le chargement
+                ease: "easeInOut",
+                repeatDelay: 5, // Relancer l'animation toutes les 5 secondes
+                repeat: Infinity // Tourner en boucle
+              }}
+            >
+              👋
+            </motion.span>
           </h1>
+          {/* ----------------------------------------------------------- */}
+          
         </div>
         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${darkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-100'}`}>
           <Zap className="text-amber-400" fill="currentColor" size={20} />
         </div>
       </div>
 
-      {/* Main Status Card avec Modulation Dynamique */}
+      {/* ... Reste du composant identique ... */}
+      {/* Main Status Card */}
       <div className={bentoClass(status !== ServiceStatus.OFF) + " p-8"}>
         {modulation && (
           <div className="mb-6 space-y-3">
