@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   Clock, 
   Play, 
@@ -12,7 +12,8 @@ import {
   MapPin,
   AlertCircle
 } from 'lucide-react';
-import { Shift, ServiceStatus, ActivityLog, UserStats } from '../types';
+import { Shift, ServiceStatus, ActivityLog, UserStats, ModulationStats } from '../types';
+import { useModulation } from '../hooks/useModulation'; // Import de ton nouveau hook
 
 interface BoardTabProps {
   darkMode: boolean;
@@ -28,13 +29,8 @@ interface BoardTabProps {
   userStats: UserStats;
   hourlyRate: string;
   onOpenAssistant: () => void;
-  modulationInfo?: {
-    weekInCycle: number;
-    totalWeeks: number;
-    daysRemaining: number;
-    totalHours: number;
-    progress: number;
-  } | null;
+  // Utilisation de l'interface propre définie dans types.ts
+  modulationInfo?: ModulationStats | null; 
 }
 
 const BoardTab: React.FC<BoardTabProps> = ({
@@ -46,12 +42,16 @@ const BoardTab: React.FC<BoardTabProps> = ({
   onEndService,
   onToggleBreak,
   shifts,
-  logs,
   userStats,
-  hourlyRate,
   onOpenAssistant,
-  modulationInfo
 }) => {
+  // 1. Calcul dynamique de la modulation basé sur les préférences utilisateur
+  const modulation = useModulation(
+    shifts, 
+    userStats.modulationAnchorDate, 
+    userStats.modulationCycleWeeks
+  );
+
   const today = new Date().toISOString().split('T')[0];
   
   const todayShifts = useMemo(() => 
@@ -59,10 +59,12 @@ const BoardTab: React.FC<BoardTabProps> = ({
     [shifts, today]
   );
 
+  // 2. Calcul des heures de la semaine (Lundi à Dimanche)
   const weeklyHours = useMemo(() => {
     const now = new Date();
+    const dayOfWeek = (now.getDay() + 6) % 7; 
     const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay() + 1);
+    startOfWeek.setDate(now.getDate() - dayOfWeek);
     startOfWeek.setHours(0, 0, 0, 0);
     
     const weekShifts = shifts.filter(s => {
@@ -70,15 +72,14 @@ const BoardTab: React.FC<BoardTabProps> = ({
       return d >= startOfWeek && s.end !== '--:--';
     });
     
-    let totalMin = 0;
-    weekShifts.forEach(s => {
+    const totalMin = weekShifts.reduce((acc, s) => {
       const [h1, m1] = s.start.split(':').map(Number);
       const [h2, m2] = s.end.split(':').map(Number);
       let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
       if (diff < 0) diff += 1440;
-      if (s.breaks) s.breaks.forEach(b => diff -= b.duration);
-      totalMin += diff;
-    });
+      const breakDur = s.breaks?.reduce((sum, b) => sum + b.duration, 0) || 0;
+      return acc + (diff - breakDur);
+    }, 0);
     
     return (totalMin / 60).toFixed(1);
   }, [shifts]);
@@ -106,17 +107,17 @@ const BoardTab: React.FC<BoardTabProps> = ({
         </div>
       </div>
 
-      {/* Main Status Card */}
+      {/* Main Status Card avec Modulation Dynamique */}
       <div className={bentoClass(status !== ServiceStatus.OFF) + " p-8"}>
-        {modulationInfo && (
+        {modulation && (
           <div className="mb-6 space-y-3">
             <div className="flex justify-between items-end">
               <div>
                 <p className={`text-[10px] font-black uppercase tracking-widest ${status !== ServiceStatus.OFF ? 'text-indigo-200' : 'text-slate-400'}`}>
-                  Cycle : Semaine {modulationInfo.weekInCycle}/{modulationInfo.totalWeeks}
+                  Cycle : Semaine {modulation.weekInCycle} / {userStats.modulationCycleWeeks}
                 </p>
                 <p className={`text-xs font-bold ${status !== ServiceStatus.OFF ? 'text-white' : (darkMode ? 'text-white' : 'text-slate-900')}`}>
-                  {modulationInfo.daysRemaining} jours avant clôture
+                  {modulation.daysRemaining} jours avant clôture
                 </p>
               </div>
               <div className="text-right">
@@ -124,14 +125,14 @@ const BoardTab: React.FC<BoardTabProps> = ({
                   Total Cycle
                 </p>
                 <p className={`text-xs font-bold ${status !== ServiceStatus.OFF ? 'text-white' : (darkMode ? 'text-white' : 'text-slate-900')}`}>
-                  {modulationInfo.totalHours.toFixed(1)}h
+                  {modulation.totalHours}h
                 </p>
               </div>
             </div>
             <div className={`h-1.5 w-full rounded-full overflow-hidden ${status !== ServiceStatus.OFF ? 'bg-white/20' : 'bg-slate-100'}`}>
               <motion.div 
                 initial={{ width: 0 }}
-                animate={{ width: `${modulationInfo.progress}%` }}
+                animate={{ width: `${modulation.progress}%` }}
                 className={`h-full rounded-full ${status !== ServiceStatus.OFF ? 'bg-white' : 'bg-indigo-600'}`}
               />
             </div>
@@ -217,7 +218,7 @@ const BoardTab: React.FC<BoardTabProps> = ({
         </div>
       </div>
 
-      {/* Today's Planning Snippet */}
+      {/* Planning Today */}
       <div className={bentoClass() + " p-6"}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2 text-slate-400">
@@ -254,7 +255,7 @@ const BoardTab: React.FC<BoardTabProps> = ({
         )}
       </div>
 
-      {/* AI Assistant Card */}
+      {/* Assistant Card */}
       <button 
         onClick={onOpenAssistant}
         className="w-full bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[32px] p-8 text-white shadow-2xl shadow-indigo-500/20 relative overflow-hidden text-left group active:scale-[0.98] transition-all"

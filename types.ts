@@ -62,3 +62,13 @@ export interface PushNotification {
   url?: string;
   action?: 'open_navigation';
 }
+
+export interface ModulationStats {
+  totalHours: number;
+  startDate: Date;
+  endDate: Date;
+  progress: number;
+  daysRemaining: number;
+  weekInCycle: number;
+  totalWeeks: number;
+}
