@@ -797,13 +797,20 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                                 <span className="text-indigo-400">Fin : {calculateEndTimeFromDuration(tempBreak.start, tempBreak.duration)}</span>
                               </div>
                               <input 
-                                type="range" 
-                                min="1" 
-                                max="90" 
-                                className="w-full h-1.5 bg-slate-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
-                                value={tempBreak.duration} 
-                                onChange={e => setTempBreak({ ...tempBreak, duration: parseInt(e.target.value) })} 
-                              />
+  type="range" 
+  min="30" 
+  max="90" 
+  step="1"
+  className="w-full h-1.5 bg-indigo-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
+  value={tempBreak.duration} 
+  onChange={(e) => {
+    const val = parseInt(e.target.value, 10);
+    setTempBreak(prev => ({
+      ...prev,
+      duration: val
+    }));
+  }} 
+/>
                             </div>
 
                             {tempBreak.type === 'repas' && (
@@ -1022,13 +1029,20 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                             <span className="text-indigo-500">Fin : {calculateEndTimeFromDuration(tempBreak.start, tempBreak.duration)}</span>
                           </div>
                           <input 
-                            type="range" 
-                            min="1" 
-                            max="120" 
-                            className="w-full h-1.5 bg-indigo-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
-                            value={tempBreak.duration} 
-                            onChange={e => setTempBreak({ ...tempBreak, duration: parseInt(e.target.value) })} 
-                          />
+  type="range" 
+  min="30" 
+  max="90" 
+  step="1"
+  className="w-full h-1.5 bg-indigo-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
+  value={tempBreak.duration} 
+  onChange={(e) => {
+    const val = parseInt(e.target.value, 10);
+    setTempBreak(prev => ({
+      ...prev,
+      duration: val
+    }));
+  }} 
+/>
                         </div>
 
                         {tempBreak.type === 'repas' && (
