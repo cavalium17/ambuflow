@@ -168,7 +168,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     isActive: false,
     type: 'repas',
     start: '12:00',
-    duration: 30,
+    duration: 90,
     location: 'Entreprise'
   });
 
@@ -767,7 +767,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                             <Coffee size={14} /> Pause Café
                           </button>
                           <button 
-                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 30, start: '12:00' })}
+                            onClick={() => setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 90, start: '12:00' })}
                             className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-slate-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
                           >
                             <Utensils size={14} /> Coupure Repas
