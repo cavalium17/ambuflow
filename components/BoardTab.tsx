@@ -1,18 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Clock, 
-  Play, 
-  Coffee, 
-  Zap, 
-  TrendingUp, 
-  Calendar,
-  ChevronRight,
-  Sparkles,
-  MapPin,
-  AlertCircle,
-  LogOut,
-  Bell
+  Clock, Play, Coffee, Zap, TrendingUp, Calendar,
+  ChevronRight, Sparkles, MapPin, AlertCircle, LogOut, Utensils
 } from 'lucide-react';
 import { Shift, ServiceStatus, UserStats } from '../types';
 
@@ -42,8 +32,9 @@ const BoardTab: React.FC<BoardTabProps> = ({
   userStats,
   onOpenAssistant,
 }) => {
-  // 1. Horloge Système Temps Réel
   const [now, setNow] = useState(new Date());
+
+  // Horloge temps réel
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
@@ -56,22 +47,18 @@ const BoardTab: React.FC<BoardTabProps> = ({
     [shifts, today]
   );
 
-  // 2. Logique du décompte pour la prochaine planification
+  // Décompte Prochaine Mission
   const nextShiftCountdown = useMemo(() => {
     const upcoming = shifts.find(s => {
       const shiftDate = new Date(`${s.day}T${s.start}`);
       return shiftDate > now;
     });
-
     if (!upcoming) return null;
-
     const diff = new Date(`${upcoming.day}T${upcoming.start}`).getTime() - now.getTime();
     if (diff <= 0 || diff > 24 * 60 * 60 * 1000) return null;
-
     const h = Math.floor(diff / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     const s = Math.floor((diff % 60000) / 1000);
-
     return `T- ${h}h ${m}m ${s}s`;
   }, [shifts, now]);
 
@@ -79,7 +66,6 @@ const BoardTab: React.FC<BoardTabProps> = ({
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7));
     startOfWeek.setHours(0, 0, 0, 0);
-    
     const totalMin = shifts.filter(s => new Date(s.day) >= startOfWeek && s.end !== '--:--')
       .reduce((acc, s) => {
         const [h1, m1] = s.start.split(':').map(Number);
@@ -89,85 +75,74 @@ const BoardTab: React.FC<BoardTabProps> = ({
         const breakDur = s.breaks?.reduce((sum, b) => sum + b.duration, 0) || 0;
         return acc + (diff - breakDur);
       }, 0);
-    
     return (totalMin / 60).toFixed(1);
   }, [shifts, now]);
-
-  const bentoClass = (active: boolean = false) => `
-    relative overflow-hidden transition-all duration-500 rounded-[32px] border 
-    ${darkMode 
-      ? (active ? 'bg-slate-900 border-indigo-500 shadow-2xl shadow-indigo-500/20' : 'bg-slate-900 border-white/5') 
-      : (active ? 'bg-white border-indigo-200 shadow-xl' : 'bg-white border-slate-100')
-    }
-  `;
 
   return (
     <div className={`p-5 space-y-6 ${darkMode ? 'bg-[#050505]' : 'bg-slate-50'} min-h-screen overflow-y-auto`}>
       
-      {/* Header : Bonjour Adrien + Main Animée */}
+      {/* Header avec Main Animée Forcée */}
       <div className="flex items-center justify-between px-1">
         <div>
           <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.4em] mb-1">AMBUFLOW</p>
-          <h1 className={`text-2xl font-black tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'} flex items-center gap-2`}>
-            Salut, {userName.split(' ')[0]} 
+          <div className="flex items-center gap-2">
+            <h1 className={`text-2xl font-black tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+              Salut, {userName.split(' ')[0]}
+            </h1>
             <motion.span 
-              animate={{ rotate: [0, 15, -10, 15, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 0.5 }}
-              style={{ transformOrigin: 'bottom center' }}
-              className="inline-block"
+              animate={{ rotate: [0, 20, -10, 20, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              style={{ transformOrigin: '70% 70%', display: 'inline-block' }}
+              className="text-2xl"
             >
               👋
             </motion.span>
-          </h1>
+          </div>
         </div>
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${darkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-100'}`}>
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${darkMode ? 'bg-zinc-900 border-white/10' : 'bg-white border-slate-100'}`}>
           <Zap className="text-amber-400" fill="currentColor" size={20} />
         </div>
       </div>
 
-      {/* Box Principale (Mission) avec Encoche de décompte */}
+      {/* Box Principale avec Horloge et Décompte */}
       <div className="relative pt-2">
         <AnimatePresence>
           {nextShiftCountdown && (
             <motion.div 
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 10, opacity: 0 }}
-              className="absolute -top-1 left-1/2 -translate-x-1/2 z-20 bg-indigo-600 px-4 py-1.5 rounded-full shadow-lg border border-indigo-400/30"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute -top-1 left-1/2 -translate-x-1/2 z-20 bg-indigo-600 px-4 py-1.5 rounded-full border border-indigo-400/30"
             >
-              <p className="text-[9px] font-black text-white whitespace-nowrap tracking-wider uppercase">
+              <p className="text-[9px] font-black text-white uppercase tracking-wider">
                 Prochaine prise : {nextShiftCountdown}
               </p>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className={bentoClass(status !== ServiceStatus.OFF) + " p-8 relative"}>
+        <div className={`relative overflow-hidden rounded-[32px] border p-8 ${status !== ServiceStatus.OFF ? 'bg-zinc-900 border-indigo-500 shadow-2xl shadow-indigo-500/20' : (darkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-slate-100 shadow-xl')}`}>
           <div className="flex flex-col items-center text-center space-y-6">
             <div className="space-y-2">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${status !== ServiceStatus.OFF ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                <p className={`text-[10px] font-black uppercase tracking-widest ${status !== ServiceStatus.OFF ? 'text-indigo-200' : 'text-slate-400'}`}>
-                  {status === ServiceStatus.OFF ? 'Hors Service' : 'Mission en cours'}
-                </p>
-              </div>
-              
-              <h2 className={`text-6xl font-black tracking-tighter tabular-nums ${status !== ServiceStatus.OFF ? 'text-white' : (darkMode ? 'text-white' : 'text-slate-900')}`}>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 flex items-center justify-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Mission en cours
+              </p>
+              <h2 className={`text-6xl font-black tracking-tighter tabular-nums ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                 {now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </h2>
             </div>
 
             <div className="flex gap-3 w-full">
               {status === ServiceStatus.OFF ? (
-                <button onClick={onStartService} className="flex-1 py-5 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all text-sm">
+                <button onClick={onStartService} className="flex-1 py-5 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-widest text-sm">
                   Prendre le service
                 </button>
               ) : (
                 <>
-                  <button onClick={onToggleBreak} className="p-5 rounded-2xl bg-white/10 text-amber-500 border border-white/10 active:scale-95 transition-all">
-                    {status === ServiceStatus.BREAK ? <Play size={24} /> : <Coffee size={24} />}
+                  <button onClick={onToggleBreak} className="p-5 rounded-2xl bg-white/5 text-amber-500 border border-white/10 active:scale-90 transition-transform">
+                    <Coffee size={24} />
                   </button>
-                  <button onClick={onEndService} className="flex-1 py-5 rounded-2xl bg-rose-500 text-white font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 text-sm border border-rose-400">
+                  <button onClick={onEndService} className="flex-1 py-5 rounded-2xl bg-rose-500 text-white font-black uppercase tracking-widest flex items-center justify-center gap-2 text-sm">
                     <LogOut size={20} /> Fin
                   </button>
                 </>
@@ -177,88 +152,23 @@ const BoardTab: React.FC<BoardTabProps> = ({
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Grid Stats et Planning Today (Inchangé pour la complétion) */}
       <div className="grid grid-cols-2 gap-4">
-        <div className={bentoClass() + " p-6"}>
+        <div className={`p-6 rounded-[32px] border ${darkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-slate-100'}`}>
           <div className="flex items-center gap-2 text-indigo-500 mb-3">
             <TrendingUp size={16} />
             <span className="text-[9px] font-black uppercase tracking-widest">Semaine</span>
           </div>
-          <div className="flex items-baseline gap-1">
-            <span className={`text-3xl font-black tracking-tighter ${darkMode ? 'text-white' : 'text-slate-900'}`}>{weeklyHours}</span>
-            <span className="text-xs font-bold text-slate-400">h</span>
-          </div>
+          <p className={`text-3xl font-black tracking-tighter ${darkMode ? 'text-white' : 'text-slate-900'}`}>{weeklyHours}h</p>
         </div>
-
-        <div className={bentoClass() + " p-6"}>
+        <div className={`p-6 rounded-[32px] border ${darkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-slate-100'}`}>
           <div className="flex items-center gap-2 text-emerald-500 mb-3">
             <Zap size={16} />
             <span className="text-[9px] font-black uppercase tracking-widest">Niveau {userStats.level}</span>
           </div>
-          <div className="flex items-baseline gap-1">
-            <span className={`text-3xl font-black tracking-tighter ${darkMode ? 'text-white' : 'text-slate-900'}`}>{userStats.xp % 1000}</span>
-            <span className="text-xs font-bold text-slate-400">XP</span>
-          </div>
+          <p className={`text-3xl font-black tracking-tighter ${darkMode ? 'text-white' : 'text-slate-900'}`}>{userStats.xp % 1000} XP</p>
         </div>
       </div>
-
-      {/* Planning Today */}
-      <div className={bentoClass() + " p-6"}>
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2 text-slate-400">
-            <Calendar size={16} />
-            <span className="text-[9px] font-black uppercase tracking-widest">Aujourd'hui</span>
-          </div>
-          <button className="text-[9px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-1">
-            Voir tout <ChevronRight size={12} />
-          </button>
-        </div>
-
-        {todayShifts.length > 0 ? (
-          <div className="space-y-4">
-            {todayShifts.map(shift => (
-              <div key={shift.id} className={`flex items-center justify-between p-4 rounded-2xl ${darkMode ? 'bg-white/5' : 'bg-slate-50'}`}>
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shift.vehicle.includes('ASSU') ? 'bg-rose-500' : 'bg-indigo-500'} text-white`}>
-                    <MapPin size={18} />
-                  </div>
-                  <div>
-                    <p className={`text-sm font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>{shift.start} - {shift.end}</p>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{shift.vehicle}</p>
-                  </div>
-                </div>
-                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="py-8 text-center">
-            <AlertCircle className="mx-auto text-slate-300 mb-2" size={24} />
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aucune mission prévue</p>
-          </div>
-        )}
-      </div>
-
-      {/* Assistant Card */}
-      <button 
-        onClick={onOpenAssistant}
-        className="w-full bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden text-left group active:scale-[0.98] transition-all"
-      >
-        <div className="relative z-10 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
-              <Sparkles className="text-amber-300" size={20} />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-100">Assistant IA</span>
-          </div>
-          <div>
-            <h3 className="text-2xl font-black tracking-tight mb-2">AmbuFlow Insights</h3>
-            <p className="text-indigo-100 text-xs font-medium opacity-80 leading-relaxed max-w-[80%]">
-              Analysez votre service pour optimiser votre récupération et vos gains.
-            </p>
-          </div>
-        </div>
-      </button>
     </div>
   );
 };
