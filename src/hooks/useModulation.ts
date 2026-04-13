@@ -1,57 +1,62 @@
+
 import { useMemo } from 'react';
-import { Shift, ModulationStats } from '../types'; // Import du type pour garantir la structure
+import { Shift, ModulationStats } from '../types';
+import { calculateEffectiveMinutes } from '../utils/shiftUtils';
 
 export const useModulation = (
-  shifts: Shift[], 
-  anchorDateStr: string, 
-  cycleWeeks: number
-): ModulationStats | null => { // On définit le type de retour
+  shifts: Shift[],
+  anchorDateStr: string | undefined,
+  cycleWeeksStr: string | number | undefined,
+  activeShiftId: string | null,
+  currentTime: Date
+): ModulationStats | null => {
   return useMemo(() => {
     if (!anchorDateStr) return null;
 
-    const ANCHOR_DATE = new Date(anchorDateStr);
-    const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
-    const now = new Date();
+    const anchorDate = new Date(anchorDateStr);
+    const cycleWeeksRaw = typeof cycleWeeksStr === 'string' ? parseInt(cycleWeeksStr) : (cycleWeeksStr || 4);
+    const cycleWeeks = isNaN(cycleWeeksRaw as number) ? 4 : (cycleWeeksRaw as number);
+    const now = currentTime;
 
-    const cycleDurationMs = cycleWeeks * MS_PER_WEEK;
-    const diffInMs = now.getTime() - ANCHOR_DATE.getTime();
+    // Calculer le début du cycle actuel
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    const diffMs = now.getTime() - anchorDate.getTime();
+    const weeksSinceAnchor = Math.floor(diffMs / msPerWeek);
+    const currentCycleStartWeeks = Math.floor(weeksSinceAnchor / cycleWeeks) * cycleWeeks;
     
-    // Calcul de l'index du cycle actuel
-    const cycleIndex = Math.floor(diffInMs / cycleDurationMs);
+    const startDate = new Date(anchorDate.getTime() + currentCycleStartWeeks * msPerWeek);
+    const endDate = new Date(startDate.getTime() + cycleWeeks * msPerWeek);
     
-    const currentCycleStart = new Date(ANCHOR_DATE.getTime() + (cycleIndex * cycleDurationMs));
-    const currentCycleEnd = new Date(currentCycleStart.getTime() + cycleDurationMs);
+    // Calculer la semaine actuelle dans le cycle (1 à cycleWeeks)
+    const weekInCycle = (weeksSinceAnchor % cycleWeeks) + 1;
 
-    // Filtrage des shifts du cycle
+    // Calculer le total des heures dans ce cycle
     const cycleShifts = shifts.filter(s => {
-      const d = new Date(s.day);
-      // On inclut les shifts qui commencent le jour du début et finissent avant la fin du cycle
-      return d >= currentCycleStart && d < currentCycleEnd && s.end !== '--:--';
+      const shiftDate = new Date(s.day);
+      return shiftDate >= startDate && shiftDate < endDate && (s.end !== '--:--' || s.id === activeShiftId);
     });
 
-    // Calcul des heures (Conversion en minutes puis en heures décimales)
-    const totalMin = cycleShifts.reduce((acc, s) => {
-      const [h1, m1] = s.start.split(':').map(Number);
-      const [h2, m2] = s.end.split(':').map(Number);
-      
-      let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
-      if (diff < 0) diff += 1440; // Gestion du passage à minuit
-
-      const breaks = s.breaks?.reduce((sum, b) => sum + b.duration, 0) || 0;
-      return acc + (diff - breaks);
+    const totalMinutes = cycleShifts.reduce((acc, s) => {
+      return acc + calculateEffectiveMinutes(s, activeShiftId, currentTime);
     }, 0);
 
-    const daysInCycle = cycleWeeks * 7;
-    const daysElapsed = Math.floor((now.getTime() - currentCycleStart.getTime()) / (24 * 60 * 60 * 1000));
+    const totalHours = parseFloat((totalMinutes / 60).toFixed(1));
+    
+    // Calculer la progression
+    const totalCycleMs = endDate.getTime() - startDate.getTime();
+    const elapsedMs = now.getTime() - startDate.getTime();
+    const progress = Math.min(100, Math.max(0, Math.floor((elapsedMs / totalCycleMs) * 100)));
+
+    const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
 
     return {
-      totalHours: Number((totalMin / 60).toFixed(1)),
-      startDate: currentCycleStart,
-      endDate: currentCycleEnd,
-      progress: Math.min(100, Math.max(0, (daysElapsed / daysInCycle) * 100)),
-      daysRemaining: daysInCycle - daysElapsed,
-      weekInCycle: Math.min(cycleWeeks, Math.floor(daysElapsed / 7) + 1),
-      totalWeeks: cycleWeeks // <--- Crucial pour l'affichage "Semaine X / Y"
+      totalHours: isNaN(totalHours) ? 0 : totalHours,
+      startDate,
+      endDate,
+      progress: isNaN(progress) ? 0 : progress,
+      daysRemaining: isNaN(daysRemaining) ? 0 : daysRemaining,
+      weekInCycle: isNaN(weekInCycle) ? 1 : weekInCycle,
+      totalWeeks: cycleWeeks
     };
-  }, [shifts, anchorDateStr, cycleWeeks]);
+  }, [shifts, anchorDateStr, cycleWeeksStr, activeShiftId, currentTime]);
 };

@@ -1,23 +1,17 @@
 
 import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getStorage } from "firebase/storage";
-
-// Ces valeurs doivent être récupérées depuis la console Firebase (https://console.firebase.google.com/)
-const firebaseConfig = {
-  apiKey: "AIzaSyA_kth_5Ykhm7X1zlc1TWuPoOZRx2RqZtc",
-  authDomain: "ambuflow-e5ffc.firebaseapp.com",
-  projectId: "ambuflow-e5ffc",
-  storageBucket: "ambuflow-e5ffc.firebasestorage.app",
-  messagingSenderId: "296039792412",
-  appId: "1:296039792412:web:1ae46d1b28c5f259bac4d9",
-  measurementId: "G-CLQE06YVBK"
-};
+import firebaseConfig from '../firebase-applet-config.json';
 
 // Clé VAPID publique (Web Push) - À générer dans Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
 export const VAPID_KEY = "BCtoGbVvlqhGFK4QDOD1OtQMdydaMrKK_EKDp1-zBvEv9Yc46yTBCJrj1Z3YmFk1MtvfxoMqv5MCHyi4xpZOzsw";
 
 const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const storage = getStorage(app);
 let messaging: Messaging | null = null;
 
