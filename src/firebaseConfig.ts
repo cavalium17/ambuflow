@@ -1,18 +1,19 @@
 
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getStorage } from "firebase/storage";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Clé VAPID publique (Web Push) - À générer dans Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
 export const VAPID_KEY = "BCtoGbVvlqhGFK4QDOD1OtQMdydaMrKK_EKDp1-zBvEv9Yc46yTBCJrj1Z3YmFk1MtvfxoMqv5MCHyi4xpZOzsw";
 
 const app = initializeApp(firebaseConfig);
+export const storage = getStorage(app);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const storage = getStorage(app);
 let messaging: Messaging | null = null;
 
 // Initialisation sécurisée (évite les erreurs sur les navigateurs non compatibles)
