@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   Clock, 
   Play, 
@@ -9,9 +9,10 @@ import {
   ChevronRight,
   Sparkles,
   MapPin,
-  AlertCircle
+  AlertCircle,
+  Timer
 } from 'lucide-react';
-import { Shift, ServiceStatus, ActivityLog, UserStats } from '../types';
+import { Shift, ServiceStatus, ActivityLog, UserStats, UserRole } from '../types';
 
 interface BoardTabProps {
   darkMode: boolean;
@@ -27,6 +28,9 @@ interface BoardTabProps {
   userStats: UserStats;
   hourlyRate: string;
   onOpenAssistant: () => void;
+  roles: UserRole[];
+  primaryRole: UserRole | '';
+  setPrimaryRole: (role: UserRole) => void;
 }
 
 const BoardTab: React.FC<BoardTabProps> = ({
@@ -41,10 +45,79 @@ const BoardTab: React.FC<BoardTabProps> = ({
   logs,
   userStats,
   hourlyRate,
-  onOpenAssistant
+  onOpenAssistant,
+  roles = [],
+  primaryRole = '',
+  setPrimaryRole
 }) => {
   const today = new Date().toISOString().split('T')[0];
-  
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isBreakStarting, setIsBreakStarting] = useState(false);
+  const [breakTimer, setBreakTimer] = useState<number>(0);
+  const [serviceDuration, setServiceDuration] = useState<string>("00:00:00");
+
+  // Synchronisation de l'horloge et calcul de la durée de service
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (status !== ServiceStatus.OFF && activeShift?.start) {
+        const now = new Date();
+        const [h, m] = activeShift.start.split(':').map(Number);
+        const start = new Date(now);
+        start.setHours(h, m, 0, 0);
+        
+        let diff = now.getTime() - start.getTime();
+        if (diff < 0) diff += 24 * 60 * 60 * 1000; // Cas de passage à minuit
+        
+        const hours = Math.floor(diff / 3600000);
+        const minutes = Math.floor((diff % 3600000) / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        
+        setServiceDuration(
+          `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+        );
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [status, activeShift]);
+
+  // Gestion du décompte de pause
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (status === ServiceStatus.BREAK) {
+      // On commence par un décompte de transition (5 secondes par exemple)
+      if (countdown === null && !isBreakStarting && breakTimer === 0) {
+        setCountdown(5);
+        setIsBreakStarting(true);
+      }
+
+      interval = setInterval(() => {
+        if (countdown !== null && countdown > 0) {
+          setCountdown(prev => (prev !== null ? prev - 1 : null));
+        } else if (countdown === 0) {
+          setCountdown(null);
+          setIsBreakStarting(false);
+          // Début du décompte de pause (20 minutes = 1200 secondes)
+          setBreakTimer(1200);
+        } else if (breakTimer > 0) {
+          setBreakTimer(prev => prev - 1);
+        }
+      }, 1000);
+    } else {
+      setCountdown(null);
+      setIsBreakStarting(false);
+      setBreakTimer(0);
+    }
+
+    return () => clearInterval(interval);
+  }, [status, countdown, isBreakStarting, breakTimer]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
   const todayShifts = useMemo(() => 
     shifts.filter(s => s.day === today),
     [shifts, today]
@@ -75,10 +148,10 @@ const BoardTab: React.FC<BoardTabProps> = ({
   }, [shifts]);
 
   const bentoClass = (active: boolean = false) => `
-    relative overflow-hidden transition-all duration-500 rounded-[32px] border 
+    relative overflow-hidden transition-all duration-700 rounded-[40px] border 
     ${darkMode 
-      ? (active ? 'bg-indigo-600 border-indigo-400 shadow-2xl shadow-indigo-500/20' : 'bg-slate-900 border-white/5 shadow-xl') 
-      : (active ? 'bg-indigo-600 border-indigo-400 shadow-2xl shadow-indigo-500/30' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/50')
+      ? (active ? (status === ServiceStatus.BREAK ? 'bg-amber-500 border-amber-400 shadow-2xl shadow-amber-500/20' : 'bg-indigo-600 border-indigo-400 shadow-2xl shadow-indigo-500/20') : 'bg-slate-900 border-white/5 shadow-xl') 
+      : (active ? (status === ServiceStatus.BREAK ? 'bg-amber-500 border-amber-400 shadow-2xl shadow-amber-500/30' : 'bg-indigo-600 border-indigo-400 shadow-2xl shadow-indigo-500/30') : 'bg-white border-slate-100 shadow-xl shadow-slate-200/50')
     }
   `;
 
@@ -91,18 +164,42 @@ const BoardTab: React.FC<BoardTabProps> = ({
           <h1 className={`text-3xl font-black tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>
             Salut, {userName.split(' ')[0]} 👋
           </h1>
+          {roles.length > 1 && (
+            <div className="flex gap-2 mt-2">
+              {roles.map(role => (
+                <button
+                  key={role}
+                  onClick={() => setPrimaryRole(role)}
+                  className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
+                    primaryRole === role 
+                      ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
+                      : 'bg-slate-500/10 text-slate-400'
+                  }`}
+                >
+                  {role === 'dea' ? 'DEA' : role === 'auxiliary' ? 'AUX' : 'TAXI'}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${darkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-100'}`}>
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${darkMode ? 'bg-slate-950 border-white/10' : 'bg-white border-slate-100'}`}>
           <Zap className="text-amber-400" fill="currentColor" size={20} />
         </div>
       </div>
 
       {/* Main Status Card */}
       <div className={bentoClass(status !== ServiceStatus.OFF) + " p-8"}>
-        <div className="flex flex-col items-center text-center space-y-6">
-          <div className={`w-20 h-20 rounded-[28px] flex items-center justify-center shadow-2xl ${
+        {/* Background Coffee Icon for Break */}
+        {status === ServiceStatus.BREAK && (
+          <div className="absolute -right-10 -top-10 text-white/10 rotate-12">
+            <Coffee size={240} strokeWidth={1} />
+          </div>
+        )}
+
+        <div className="relative z-10 flex flex-col items-center text-center space-y-6">
+          <div className={`w-20 h-20 rounded-[28px] flex items-center justify-center shadow-2xl transition-all duration-500 ${
             status === ServiceStatus.WORKING ? 'bg-white text-indigo-600 animate-pulse' : 
-            status === ServiceStatus.BREAK ? 'bg-amber-400 text-white' : 
+            status === ServiceStatus.BREAK ? 'bg-white text-amber-500' : 
             'bg-indigo-500 text-white'
           }`}>
             {status === ServiceStatus.WORKING ? <Clock size={40} strokeWidth={2.5} /> : 
@@ -113,14 +210,41 @@ const BoardTab: React.FC<BoardTabProps> = ({
           <div className="space-y-2">
             <h2 className={`text-2xl font-black uppercase tracking-tighter ${status !== ServiceStatus.OFF ? 'text-white' : (darkMode ? 'text-white' : 'text-slate-900')}`}>
               {status === ServiceStatus.WORKING ? 'En Service' : 
-               status === ServiceStatus.BREAK ? 'En Pause' : 
+               status === ServiceStatus.BREAK ? (isBreakStarting ? 'Préparation...' : 'En Pause') : 
                'Hors Service'}
             </h2>
-            <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${status !== ServiceStatus.OFF ? 'text-indigo-100' : 'text-slate-400'}`}>
-              {status === ServiceStatus.WORKING ? `Depuis ${activeShift?.start}` : 
-               status === ServiceStatus.BREAK ? 'Reprise prévue bientôt' : 
-               'Prêt pour votre prochaine mission ?'}
-            </p>
+            
+            <div className="flex flex-col items-center">
+              {status === ServiceStatus.WORKING && (
+                <div className="flex items-center gap-2 text-white/90 font-mono text-xl font-black tracking-widest">
+                  <Timer size={18} />
+                  {serviceDuration}
+                </div>
+              )}
+
+              {status === ServiceStatus.BREAK && (
+                <div className="space-y-1">
+                  {isBreakStarting ? (
+                    <p className="text-xs font-black text-white uppercase tracking-widest animate-bounce">
+                      Début de la pause dans {countdown}s
+                    </p>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1">
+                      <p className="text-[10px] font-bold text-white/70 uppercase tracking-[0.2em]">Temps restant</p>
+                      <p className="text-3xl font-black text-white tracking-tighter font-mono">
+                        {formatTime(breakTimer)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {status === ServiceStatus.OFF && (
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+                  Prêt pour votre prochaine mission ?
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-3 w-full">

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, Component, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Bell, 
   Coffee, 
@@ -49,10 +49,7 @@ import {
   Star,
   Loader2
 } from 'lucide-react';
-import { ServiceStatus, ActivityLog, AppTab, Shift, Break, UserStats, PushNotification as PushType } from './types';
-import SplashScreen from './components/SplashScreen';
-import AuthScreen from './components/AuthScreen';
-import Onboarding from './components/Onboarding';
+import { ServiceStatus, ActivityLog, AppTab, Shift, Break, UserStats, UserRole, UserProfile, PushNotification as PushType } from './types';
 import BoardTab from './components/BoardTab';
 import AssistantTab from './components/AssistantTab';
 import PlanningTab from './components/PlanningTab';
@@ -61,6 +58,7 @@ import ProfileTab from './components/ProfileTab';
 import Navigation from './components/Navigation';
 import PushNotification from './components/PushNotification';
 import DailyRecap from './components/DailyRecap';
+import Onboarding from './components/Onboarding';
 import { auth, db } from './src/firebaseConfig';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -229,8 +227,6 @@ const App: React.FC = () => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [configLoading, setConfigLoading] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
-  const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [isAuthReady, setIsAuthReady] = useState(false);
 
@@ -299,21 +295,44 @@ const App: React.FC = () => {
   const [initialCpBalance, setInitialCpBalance] = useState(0);
   const [customHours, setCustomHours] = useState("");
   const [followSystemTheme, setFollowSystemTheme] = useState(true);
+  const [onboarded, setOnboarded] = useState(false);
+  const [roles, setRoles] = useState<UserRole[]>([]);
+  const [primaryRole, setPrimaryRole] = useState<UserRole | ''>('');
+  const [weeklyContractHours, setWeeklyContractHours] = useState(35);
+  const [overtimeMode, setOvertimeMode] = useState<'weekly' | 'biweekly' | 'modulation' | 'annualized'>('weekly');
+  const [payRateMode, setPayRateMode] = useState<'100_percent' | '90_percent'>('100_percent');
 
   // Missing States
-  const [status, setStatus] = useState<ServiceStatus>(ServiceStatus.OFF);
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [status, setStatus] = useState<ServiceStatus>(() => {
+    const saved = localStorage.getItem('ambuflow_status');
+    return (saved as ServiceStatus) || ServiceStatus.OFF;
+  });
+  const [logs, setLogs] = useState<ActivityLog[]>(() => {
+    const saved = localStorage.getItem('ambuflow_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
-  const [scheduledShiftId, setScheduledShiftId] = useState<string | null>(null);
+  const [scheduledShiftId, setScheduledShiftId] = useState<string | null>(() => {
+    return localStorage.getItem('ambuflow_scheduled_shift_id') || null;
+  });
   const [showBreakModal, setShowBreakModal] = useState(false);
   const [breakType, setBreakType] = useState<'meal' | 'coffee'>('meal');
   const [breakStartTime, setBreakStartTime] = useState("");
   const [breakDuration, setBreakDuration] = useState(30);
   const [breakLocation, setBreakLocation] = useState<'Entreprise' | 'Extérieur'>('Entreprise');
-  const [breakStartDateTime, setBreakStartDateTime] = useState<Date | null>(null);
-  const [breakEndTimeActual, setBreakEndTimeActual] = useState<Date | null>(null);
+  const [breakStartDateTime, setBreakStartDateTime] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('ambuflow_break_start_datetime');
+    return saved ? new Date(saved) : null;
+  });
+  const [breakEndTimeActual, setBreakEndTimeActual] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('ambuflow_break_end');
+    return saved ? new Date(saved) : null;
+  });
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [nextAutoStart, setNextAutoStart] = useState<Date | null>(null);
+  const [nextAutoStart, setNextAutoStart] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('ambuflow_next_autostart');
+    return saved ? new Date(saved) : null;
+  });
   const [prefersDarkMode, setPrefersDarkMode] = useState(false);
 
   const addNotification = useCallback((title: string, message: string, type: 'info' | 'success' | 'warning') => {
@@ -367,9 +386,25 @@ const App: React.FC = () => {
     if (config.pushEnabled !== undefined) setPushEnabled(prev => prev !== config.pushEnabled ? config.pushEnabled : prev);
     if (config.followSystemTheme !== undefined) setFollowSystemTheme(prev => prev !== config.followSystemTheme ? config.followSystemTheme : prev);
     if (config.onboarded !== undefined) setOnboarded(prev => prev !== config.onboarded ? config.onboarded : prev);
+    if (config.roles !== undefined) setRoles(prev => JSON.stringify(prev) !== JSON.stringify(config.roles) ? config.roles : prev);
+    if (config.primaryRole !== undefined) setPrimaryRole(prev => prev !== config.primaryRole ? config.primaryRole : prev);
+    if (config.weeklyContractHours !== undefined) setWeeklyContractHours(prev => prev !== config.weeklyContractHours ? config.weeklyContractHours : prev);
+    if (config.overtimeMode !== undefined) setOvertimeMode(prev => prev !== config.overtimeMode ? config.overtimeMode : prev);
+    if (config.payRateMode !== undefined) setPayRateMode(prev => prev !== config.payRateMode ? config.payRateMode : prev);
     if (config.shifts !== undefined) setShifts(prev => JSON.stringify(prev) !== JSON.stringify(config.shifts) ? config.shifts : prev);
     if (config.logs !== undefined) setLogs(prev => JSON.stringify(prev) !== JSON.stringify(config.logs) ? config.logs : prev);
   }, []);
+
+  useEffect(() => {
+    if (primaryRole) {
+      const titles: Record<string, string> = {
+        dea: 'Ambulancier DEA',
+        auxiliary: 'Auxiliaire Ambulancier',
+        taxi: 'Chauffeur de Taxi'
+      };
+      setJobTitle(titles[primaryRole] || jobTitle);
+    }
+  }, [primaryRole]);
 
   const effectiveDarkMode = followSystemTheme ? prefersDarkMode : true;
 
@@ -378,6 +413,14 @@ const App: React.FC = () => {
     let unsubscribeSnapshot: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      if (!currentUser) {
+        // Mode sans connexion : on utilise un utilisateur local par défaut
+        setUser({ uid: 'local_user', email: 'guest@ambuflow.com' } as any);
+        setIsAuthReady(true);
+        setAuthLoading(false);
+        return;
+      }
+      
       setUser(currentUser);
       setIsAuthReady(true);
       
@@ -393,11 +436,6 @@ const App: React.FC = () => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             applyConfig(data);
-            if (data.onboarded !== undefined) {
-              setOnboarded(data.onboarded);
-            }
-          } else {
-            setOnboarded(false);
           }
           setAuthLoading(false);
           setConfigLoading(false);
@@ -413,7 +451,6 @@ const App: React.FC = () => {
         }
         setAuthLoading(false);
         setConfigLoading(false);
-        setOnboarded(null);
       }
     });
 
@@ -423,15 +460,11 @@ const App: React.FC = () => {
     };
   }, [applyConfig]);
 
-  const handleSplashComplete = () => {
-    setShowSplash(false);
-  };
-
   const lastSavedConfigRef = useRef<string>("");
   const isSavingRef = useRef<boolean>(false);
 
   const saveConfig = useCallback(async () => {
-    if (!user || onboarded === null || isSavingRef.current) return;
+    if (!user || isSavingRef.current) return;
 
     const config = {
       userName,
@@ -470,6 +503,11 @@ const App: React.FC = () => {
       pushEnabled,
       followSystemTheme,
       onboarded,
+      roles,
+      primaryRole,
+      weeklyContractHours,
+      overtimeMode,
+      payRateMode,
       updatedAt: new Date().toISOString()
     };
     
@@ -491,7 +529,7 @@ const App: React.FC = () => {
     } finally {
       isSavingRef.current = false;
     }
-  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, pushEnabled, followSystemTheme, onboarded]);
+  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, pushEnabled, followSystemTheme, onboarded, roles, primaryRole, weeklyContractHours, overtimeMode, payRateMode]);
 
   useEffect(() => {
     if (user) {
@@ -501,6 +539,29 @@ const App: React.FC = () => {
       return () => clearTimeout(timeout);
     }
   }, [user, saveConfig]);
+
+  const handleOnboardingComplete = useCallback((profile: Partial<UserProfile>) => {
+    if (profile.firstName) setFirstName(profile.firstName);
+    if (profile.lastName) setLastName(profile.lastName);
+    if (profile.companyName) setCompanyName(profile.companyName);
+    if (profile.roles) setRoles(profile.roles);
+    if (profile.primaryRole) setPrimaryRole(profile.primaryRole);
+    if (profile.contractType) setContractType(profile.contractType);
+    if (profile.hoursBase) setHoursBase(profile.hoursBase);
+    if (profile.contractStartDate) setContractStartDate(profile.contractStartDate);
+    if (profile.autoGeo !== undefined) setAutoGeo(profile.autoGeo);
+    if (profile.pushEnabled !== undefined) setPushEnabled(profile.pushEnabled);
+    if (profile.onboarded !== undefined) setOnboarded(profile.onboarded);
+    if (profile.weeklyContractHours !== undefined) setWeeklyContractHours(profile.weeklyContractHours);
+    if (profile.overtimeMode !== undefined) setOvertimeMode(profile.overtimeMode);
+    if (profile.modulationWeeks !== undefined) setModulationWeeks(String(profile.modulationWeeks));
+    if (profile.payRateMode !== undefined) setPayRateMode(profile.payRateMode);
+    
+    setUserName(`${profile.firstName || ''} ${profile.lastName || ''}`.trim());
+    
+    // Trigger save
+    setTimeout(() => saveConfig(), 500);
+  }, [saveConfig]);
 
   // Permissions et Notifications
   useEffect(() => {
@@ -696,23 +757,57 @@ const App: React.FC = () => {
 
   const handleStartService = useCallback((idToUse?: string | null) => {
     const now = currentTime;
-    let actualStartTimeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    const finalId = idToUse || activeShiftId;
+    const todayStr = getLocalDateString(now);
+    const actualStartTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const preciseStart = now.toISOString();
+    
+    // On cherche si on a déjà une mission pour aujourd'hui
+    const todayShift = shifts.find(s => s.day === todayStr && !s.isLeave);
+    const finalId = idToUse || todayShift?.id || activeShiftId;
 
     if (finalId) {
       const existingShift = shifts.find(s => s.id === finalId);
-      if (existingShift && existingShift.start && existingShift.start !== '--:--') {
-        actualStartTimeStr = existingShift.start;
+      if (existingShift && existingShift.day === todayStr) {
+        // On met à jour la mission existante d'aujourd'hui
+        setShifts(prev => prev.map(s => s.id === finalId ? { 
+          ...s, 
+          start: (s.start && s.start !== '--:--') ? s.start : actualStartTimeStr,
+          preciseStart: s.preciseStart || preciseStart
+        } : s));
+        setActiveShiftId(finalId);
+      } else {
+        // Mission d'un autre jour ou non trouvée, on en crée une nouvelle pour aujourd'hui
+        const newShiftId = Math.random().toString(36).substr(2, 9);
+        const newShift: Shift = { 
+          id: newShiftId, 
+          day: todayStr, 
+          start: actualStartTimeStr, 
+          preciseStart: preciseStart,
+          end: '--:--', 
+          crew: userName || 'À définir', 
+          vehicle: 'ASSU', 
+          breaks: [] 
+        };
+        setShifts(prev => [newShift, ...prev]);
+        setActiveShiftId(newShiftId);
       }
-      setShifts(prev => prev.map(s => s.id === finalId ? { ...s, start: actualStartTimeStr } : s));
-      setActiveShiftId(finalId);
     } else {
-      const todayStr = getLocalDateString(now);
+      // Aucune mission, on en crée une nouvelle
       const newShiftId = Math.random().toString(36).substr(2, 9);
-      const newShift: Shift = { id: newShiftId, day: todayStr, start: actualStartTimeStr, end: '--:--', crew: userName || 'À définir', vehicle: 'ASSU', breaks: [] };
+      const newShift: Shift = { 
+        id: newShiftId, 
+        day: todayStr, 
+        start: actualStartTimeStr, 
+        preciseStart: preciseStart,
+        end: '--:--', 
+        crew: userName || 'À définir', 
+        vehicle: 'ASSU', 
+        breaks: [] 
+      };
       setShifts(prev => [newShift, ...prev]);
       setActiveShiftId(newShiftId);
     }
+
     setStatus(ServiceStatus.WORKING);
     setSessionStartTime(now);
     addLog("Début de service", "start");
@@ -777,8 +872,13 @@ const App: React.FC = () => {
           const startDate = new Date(currentTime);
           startDate.setHours(startH, startM, 0, 0);
           
-          let actualDuration = Math.round((currentTime.getTime() - startDate.getTime()) / 60000);
-          if (actualDuration < 0) actualDuration = 0;
+          let diffMs = currentTime.getTime() - startDate.getTime();
+          // Si le diff est négatif, c'est que la pause a traversé minuit
+          if (diffMs < 0) {
+            diffMs += 24 * 60 * 60 * 1000;
+          }
+          
+          let actualDuration = Math.round(diffMs / 60000);
           
           lastBreak.duration = actualDuration;
           lastBreak.end = currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -923,7 +1023,6 @@ const App: React.FC = () => {
         pushEnabled: true,
         shifts: [],
         logs: [],
-        onboarded: false,
         updatedAt: new Date().toISOString()
       };
 
@@ -1072,9 +1171,16 @@ const App: React.FC = () => {
   const getDuration = () => {
     const activeShift = shifts.find(s => s.id === activeShiftId);
     if (!activeShift || !activeShift.start || activeShift.start === '--:--') return "00:00:00";
+    
     const [y, mon, d] = activeShift.day.split('-').map(Number);
-    const [startH, startM] = activeShift.start.split(':').map(Number);
-    const startDate = new Date(y, mon - 1, d, startH, startM, 0, 0);
+    let startDate: Date;
+
+    if (activeShift.preciseStart) {
+      startDate = new Date(activeShift.preciseStart);
+    } else {
+      const [startH, startM] = activeShift.start.split(':').map(Number);
+      startDate = new Date(y, mon - 1, d, startH, startM, 0, 0);
+    }
     
     const isCurrentlyInBreak = status === ServiceStatus.BREAK && activeShift.breaks?.length;
     const lastBreak = isCurrentlyInBreak ? activeShift.breaks![activeShift.breaks!.length - 1] : null;
@@ -1084,20 +1190,19 @@ const App: React.FC = () => {
         : currentTime;
         
     let diffMs = effectiveNow.getTime() - startDate.getTime();
-    if (diffMs < 0) return "00:00:00";
+    if (diffMs < 0) diffMs = 0;
     
     if (activeShift.breaks) {
       activeShift.breaks.forEach(b => { 
-        // On ne soustrait que les pauses terminées AVANT le moment effectif actuel
-        // Si on est en pause, effectiveNow est le début de la pause actuelle, donc on ne la soustrait pas
         if (b.end !== '--:--' && b.id !== lastBreak?.id) {
           diffMs -= (b.duration * 60000); 
         }
       });
     }
-    const h = Math.floor(Math.max(0, diffMs) / 3600000);
-    const m = Math.floor((Math.max(0, diffMs) % 3600000) / 60000);
-    const s = Math.floor((Math.max(0, diffMs) % 60000) / 1000);
+    const totalSeconds = Math.floor(Math.max(0, diffMs) / 1000);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -1105,20 +1210,38 @@ const App: React.FC = () => {
     if (shift.start === '--:--') return 0;
     const [h1, m1] = shift.start.split(':').map(Number);
     let endH, endM;
+    
+    const isCurrentlyInBreak = shift.id === activeShiftId && status === ServiceStatus.BREAK;
+    const lastBreak = isCurrentlyInBreak && shift.breaks && shift.breaks.length > 0 
+      ? shift.breaks[shift.breaks.length - 1] 
+      : null;
+
     if (shift.end !== '--:--') {
       [endH, endM] = shift.end.split(':').map(Number);
     } else if (shift.id === activeShiftId) {
-      endH = currentTime.getHours();
-      endM = currentTime.getMinutes();
+      if (isCurrentlyInBreak && lastBreak) {
+        [endH, endM] = lastBreak.start.split(':').map(Number);
+      } else {
+        endH = currentTime.getHours();
+        endM = currentTime.getMinutes();
+      }
     } else {
       return 0;
     }
+    
     let amp = (endH * 60 + endM) - (h1 * 60 + m1);
     if (amp < 0) amp += 1440;
     let eff = amp;
-    if (shift.breaks) shift.breaks.forEach(b => { eff -= b.duration; });
+    
+    if (shift.breaks) {
+      shift.breaks.forEach(b => { 
+        if (b.end !== '--:--' && b.id !== lastBreak?.id) {
+          eff -= b.duration; 
+        }
+      });
+    }
     return Math.max(0, eff);
-  }, [activeShiftId, currentTime]);
+  }, [activeShiftId, currentTime, status]);
 
   const periodStats = useMemo(() => {
     let totalMin = 0;
@@ -1159,17 +1282,28 @@ const App: React.FC = () => {
       color = "violet";
       targetMin = (parseInt(hoursBase) || 35) * 2 * 60;
     } else if (workRegime === 'modulation') {
-      const start = modulationStartDate ? new Date(modulationStartDate) : new Date();
       const weeks = parseInt(modulationWeeks) || 4;
-      const end = new Date(start);
-      end.setDate(start.getDate() + (weeks * 7));
+      const cycleDays = weeks * 7;
+      const anchor = modulationStartDate ? new Date(modulationStartDate) : (contractStartDate ? new Date(contractStartDate) : new Date(2024, 0, 1));
+      anchor.setHours(0, 0, 0, 0);
+      
+      const diffMs = currentTime.getTime() - anchor.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const currentCycleIndex = Math.floor(diffDays / cycleDays);
+      
+      const startOfCycle = new Date(anchor);
+      startOfCycle.setDate(anchor.getDate() + (currentCycleIndex * cycleDays));
+      
+      const endOfCycle = new Date(startOfCycle);
+      endOfCycle.setDate(startOfCycle.getDate() + cycleDays);
+
       shifts.forEach(s => {
         const d = new Date(s.day);
-        if (d >= start && d <= end) totalMin += calculateEffectiveMinutes(s);
+        if (d >= startOfCycle && d < endOfCycle) totalMin += calculateEffectiveMinutes(s);
       });
       targetMin = (parseInt(hoursBase) || 35) * weeks * 60;
       const remainingMin = Math.max(0, targetMin - totalMin);
-      const timeRemainingMs = end.getTime() - currentTime.getTime();
+      const timeRemainingMs = endOfCycle.getTime() - currentTime.getTime();
       const daysLeft = Math.floor(timeRemainingMs / (1000 * 60 * 60 * 24));
       const hoursLeft = Math.floor((timeRemainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       extraData = {
@@ -1201,7 +1335,7 @@ const App: React.FC = () => {
     const m = totalMin % 60;
     const progress = Math.min(100, (totalMin / targetMin) * 100);
     return { title, subtitle, icon, value: `${h}h ${m}m`, color, extraData, progress };
-  }, [shifts, workRegime, calculateEffectiveMinutes, currentTime, contractStartDate, modulationStartDate, modulationWeeks, hoursBase]);
+  }, [shifts, workRegime, calculateEffectiveMinutes, currentTime, contractStartDate, modulationStartDate, modulationWeeks, hoursBase, status, breakStartDateTime]);
 
   const todayStats = useMemo(() => {
     const todayStr = getLocalDateString(currentTime);
@@ -1225,8 +1359,13 @@ const App: React.FC = () => {
         if (s.end !== '--:--') {
           [endH, endM] = s.end.split(':').map(Number);
         } else if (s.id === activeShiftId) {
-          endH = currentTime.getHours();
-          endM = currentTime.getMinutes();
+          if (status === ServiceStatus.BREAK && breakStartDateTime) {
+            endH = breakStartDateTime.getHours();
+            endM = breakStartDateTime.getMinutes();
+          } else {
+            endH = currentTime.getHours();
+            endM = currentTime.getMinutes();
+          }
         } else {
           return;
         }
@@ -1280,7 +1419,7 @@ const App: React.FC = () => {
       gains: totalGainsBrut.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       effective: totalEffectiveMin
     };
-  }, [shifts, currentTime, activeShiftId, effectiveHourlyRate, calculateEffectiveMinutes]);
+  }, [shifts, currentTime, activeShiftId, effectiveHourlyRate, calculateEffectiveMinutes, status, breakStartDateTime]);
 
   const gainsCarouselStats = useMemo(() => {
     const calculateGainsForPeriod = (start: Date, end: Date) => {
@@ -1303,8 +1442,13 @@ const App: React.FC = () => {
           if (s.end !== '--:--') {
             [endH, endM] = s.end.split(':').map(Number);
           } else if (s.id === activeShiftId) {
-            endH = currentTime.getHours();
-            endM = currentTime.getMinutes();
+            if (status === ServiceStatus.BREAK && breakStartDateTime) {
+              endH = breakStartDateTime.getHours();
+              endM = breakStartDateTime.getMinutes();
+            } else {
+              endH = currentTime.getHours();
+              endM = currentTime.getMinutes();
+            }
           } else {
             return;
           }
@@ -1377,7 +1521,7 @@ const App: React.FC = () => {
       { label: 'Gains Semaine', value: currentWeekGains, trend: getTrend(currentWeekGains, prevWeekGains) },
       { label: 'Gains Mois', value: currentMonthGains, trend: getTrend(currentMonthGains, prevMonthGains) }
     ];
-  }, [shifts, currentTime, activeShiftId, effectiveHourlyRate, calculateEffectiveMinutes]);
+  }, [shifts, currentTime, activeShiftId, effectiveHourlyRate, calculateEffectiveMinutes, status, breakStartDateTime]);
 
   const vehicleDistribution = useMemo(() => {
     let assuMin = 0;
@@ -1401,13 +1545,24 @@ const App: React.FC = () => {
       startOfCycle.setHours(0, 0, 0, 0);
       periodShifts = shifts.filter(s => new Date(s.day) >= startOfCycle);
     } else if (workRegime === 'modulation') {
-      const start = modulationStartDate ? new Date(modulationStartDate) : new Date();
       const weeks = parseInt(modulationWeeks) || 4;
-      const end = new Date(start);
-      end.setDate(start.getDate() + (weeks * 7));
+      const cycleDays = weeks * 7;
+      const anchor = modulationStartDate ? new Date(modulationStartDate) : (contractStartDate ? new Date(contractStartDate) : new Date(2024, 0, 1));
+      anchor.setHours(0, 0, 0, 0);
+      
+      const diffMs = currentTime.getTime() - anchor.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const currentCycleIndex = Math.floor(diffDays / cycleDays);
+      
+      const startOfCycle = new Date(anchor);
+      startOfCycle.setDate(anchor.getDate() + (currentCycleIndex * cycleDays));
+      
+      const endOfCycle = new Date(startOfCycle);
+      endOfCycle.setDate(startOfCycle.getDate() + cycleDays);
+
       periodShifts = shifts.filter(s => {
         const d = new Date(s.day);
-        return d >= start && d <= end;
+        return d >= startOfCycle && d < endOfCycle;
       });
     } else if (workRegime === 'annualization') {
       const start = new Date(currentTime.getFullYear(), 0, 1);
@@ -1456,13 +1611,13 @@ const App: React.FC = () => {
     const activeShift = activeShiftId ? shifts.find(s => s.id === activeShiftId) : null;
     const lastBreak = activeShift?.breaks?.[activeShift.breaks.length - 1];
     
-    const minBreakDuration = lastBreak?.isMeal ? MEAL_MIN_DURATION : BREAK_MIN_DURATION;
+    const minBreakDuration = lastBreak ? lastBreak.duration * 60 : (lastBreak?.isMeal ? MEAL_MIN_DURATION : BREAK_MIN_DURATION);
     const elapsedBreakSeconds = status === ServiceStatus.BREAK && breakStartDateTime 
       ? Math.floor((currentTime.getTime() - breakStartDateTime.getTime()) / 1000) 
       : 0;
 
     const isBreakFinished = status === ServiceStatus.BREAK && elapsedBreakSeconds >= MAX_BREAK_DURATION;
-    const canResume = status === ServiceStatus.BREAK && elapsedBreakSeconds >= minBreakDuration;
+    const canResume = status === ServiceStatus.BREAK;
     
     let breakBackgroundImage = 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=800'; 
     let breakLabel = "COUPURE";
@@ -1483,6 +1638,24 @@ const App: React.FC = () => {
 
     return (
       <div className="p-5 space-y-5 animate-fadeIn pb-32">
+        {roles.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+            {roles.map(role => (
+              <button
+                key={role}
+                onClick={() => setPrimaryRole(role)}
+                className={`flex-none px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  primaryRole === role 
+                    ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20' 
+                    : (effectiveDarkMode ? 'bg-slate-900 border-white/5 text-slate-400' : 'bg-white border-slate-100 text-slate-500')
+                }`}
+              >
+                {role === 'dea' ? 'Ambulancier DEA' : role === 'auxiliary' ? 'Auxiliaire' : 'Taxi'}
+                {primaryRole === role && ' ★'}
+              </button>
+            ))}
+          </div>
+        )}
         {afgsuStatus && afgsuStatus !== 'valid' && (
           <div className={`p-4 rounded-[24px] border flex items-center gap-4 animate-slideUp ${
             afgsuStatus === 'expired' 
@@ -1611,7 +1784,7 @@ const App: React.FC = () => {
                         ? 'Début dans' 
                         : (elapsedBreakSeconds >= MAX_BREAK_DURATION 
                            ? 'ALERTE' 
-                           : (elapsedBreakSeconds < minBreakDuration ? 'Avant Minimum' : 'Avant Maximum'))) 
+                           : (elapsedBreakSeconds < minBreakDuration ? 'Avant la reprise' : 'Avant Maximum'))) 
                      : (status === ServiceStatus.OFF ? (isTodayFinished ? 'Total Travaillé' : 'Heure actuelle') : 'Compteur journalier')}
                  </p>
                  <h1 className={`font-black tabular-nums tracking-tighter leading-none drop-shadow-2xl ${isBreakFinished ? 'text-rose-500 animate-blink-red text-4xl py-4' : 'text-7xl'}`}>
@@ -1965,40 +2138,12 @@ const App: React.FC = () => {
     );
   };
 
-  if (showSplash) {
-    return <SplashScreen onComplete={handleSplashComplete} />;
-  }
-
-  if (authLoading || configLoading || !isAuthReady) {
-    return (
-      <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center gap-4">
-        <div className="relative">
-          <div className="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 animate-pulse" />
-          <Loader2 className="relative text-indigo-500 animate-spin" size={48} />
-        </div>
-        <p className="text-slate-400 font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">Chargement du cockpit...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <AuthScreen onAuthSuccess={() => {}} />;
-  }
-
-  if (onboarded === false) {
-    return (
-      <div className="fixed inset-0 z-[100] bg-slate-950">
-        <Onboarding onComplete={(data: any) => { 
-          applyConfig(data);
-          setOnboarded(true);
-        }} />
-      </div>
-    );
-  }
-
   return (
     <ErrorBoundary>
-      <div className={`min-h-screen transition-colors duration-500 font-sans pb-28 flex flex-col relative ${effectiveDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>
+      {!onboarded && isAuthReady && !authLoading && !configLoading ? (
+        <Onboarding onComplete={handleOnboardingComplete} />
+      ) : (
+        <div className={`min-h-screen transition-colors duration-500 font-sans pb-28 flex flex-col relative ${effectiveDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key="main-app"
@@ -2064,7 +2209,21 @@ const App: React.FC = () => {
                         </div>
                       )}
                       <div>
-                        <h1 className="text-2xl font-black tracking-tight">Bonjour, {userName.split(' ')[0] || "Ami"} 👋</h1>
+                        <h1 className="text-2xl font-black tracking-tight">
+                          Bonjour, {userName.split(' ')[0] || "Ami"}{" "}
+                          <motion.span
+                            style={{ display: 'inline-block', originX: 0.7, originY: 0.7 }}
+                            animate={{ rotate: [0, 14, -8, 14, -4, 10, 0] }}
+                            transition={{
+                              duration: 2.5,
+                              repeat: Infinity,
+                              repeatDelay: 1,
+                              ease: "easeInOut"
+                            }}
+                          >
+                            👋
+                          </motion.span>
+                        </h1>
                         <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">{companyName || "AmbuFlow"}</p>
                       </div>
                     </div>
@@ -2087,8 +2246,8 @@ const App: React.FC = () => {
             })()}
             <main className="flex-1 max-w-xl mx-auto w-full">
               {activeTab === 'home' && renderHome()}
-              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} setShifts={setShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}
-              {activeTab === 'paie' && <PaieTab logs={logs} darkMode={effectiveDarkMode} hasTaxiCard={hasTaxiCard} hourlyRate={effectiveHourlyRate} hoursBase={hoursBase} workRegime={workRegime} shifts={shifts} cpCalculationMode={cpCalculationMode as '25' | '30'} />}
+              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} setShifts={setShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} contractStartDate={contractStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}
+              {activeTab === 'paie' && <PaieTab logs={logs} darkMode={effectiveDarkMode} hasTaxiCard={hasTaxiCard} hourlyRate={effectiveHourlyRate} weeklyContractHours={weeklyContractHours} overtimeMode={overtimeMode} payRateMode={payRateMode} workRegime={workRegime} shifts={shifts} cpCalculationMode={cpCalculationMode as '25' | '30'} />}
               {activeTab === 'profile' && <ProfileTab 
                 darkMode={effectiveDarkMode} 
                 userName={userName} 
@@ -2113,7 +2272,6 @@ const App: React.FC = () => {
                 followSystemTheme={followSystemTheme} 
                 setFollowSystemTheme={setFollowSystemTheme} 
                 userStats={userStats} 
-                onLogout={handleLogout} 
                 onResetData={handleResetData}
                 hasDea={hasDea}
                 hasAux={hasAux}
@@ -2129,10 +2287,22 @@ const App: React.FC = () => {
                 setWorkRegime={setWorkRegime}
                 modulationWeeks={modulationWeeks}
                 setModulationWeeks={setModulationWeeks}
+                modulationStartDate={modulationStartDate}
+                setModulationStartDate={setModulationStartDate}
+                weeklyContractHours={weeklyContractHours}
+                setWeeklyContractHours={setWeeklyContractHours}
+                overtimeMode={overtimeMode}
+                setOvertimeMode={setOvertimeMode}
+                payRateMode={payRateMode}
+                setPayRateMode={setPayRateMode}
                 pushEnabled={pushEnabled}
                 setPushEnabled={setPushEnabled}
                 autoGeo={autoGeo}
                 setAutoGeo={setAutoGeo}
+                roles={roles}
+                setRoles={setRoles}
+                primaryRole={primaryRole}
+                setPrimaryRole={setPrimaryRole}
                 afgsuDate={afgsuDate}
                 medicalExpiryDate={medicalExpiryDate}
                 taxiFpcDate={taxiFpcDate}
@@ -2143,6 +2313,7 @@ const App: React.FC = () => {
           </motion.div>
         </AnimatePresence>
       </div>
+      )}
     </ErrorBoundary>
   );
 };

@@ -1,56 +1,52 @@
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import firebaseConfigData from '../firebase-applet-config.json';
 
-import { initializeApp } from "firebase/app";
-import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
-import { getStorage } from "firebase/storage";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-
-import firebaseConfig from '../firebase-applet-config.json';
-
-// Clé VAPID publique (Web Push) - À générer dans Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
-export const VAPID_KEY = "BCtoGbVvlqhGFK4QDOD1OtQMdydaMrKK_EKDp1-zBvEv9Yc46yTBCJrj1Z3YmFk1MtvfxoMqv5MCHyi4xpZOzsw";
-
-const app = initializeApp(firebaseConfig);
-export const storage = getStorage(app);
+const app = initializeApp(firebaseConfigData);
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-let messaging: Messaging | null = null;
+export const db = getFirestore(app, firebaseConfigData.firestoreDatabaseId);
 
-// Initialisation sécurisée (évite les erreurs sur les navigateurs non compatibles)
-try {
-  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    messaging = getMessaging(app);
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log("Firestore connection successful.");
+  } catch (error) {
+    if(error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration. The client is offline.");
+    } else {
+      console.error("Firestore connection test error:", error);
+    }
   }
-} catch (err) {
-  console.error("FCM non supporté:", err);
 }
+testConnection();
 
-export { messaging };
+export const storage = getStorage(app);
+export const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
 
 export const requestForToken = async () => {
   if (!messaging) return null;
-  
   try {
-    const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+    const currentToken = await getToken(messaging, {
+      vapidKey: 'BD_v_Y_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z_Z' // Placeholder, usually not strictly needed for basic setup if not using web push specifically
+    });
     if (currentToken) {
-      console.log('FCM Token:', currentToken);
-      console.log("Mon Token : ", currentToken);
-      // Ici, vous devriez envoyer le token à votre backend pour cibler cet utilisateur
+      console.log('Token FCM:', currentToken);
       return currentToken;
-    } else {
-      console.log('Aucun token de registration disponible. Demandez la permission.');
-      return null;
     }
   } catch (err) {
-    console.log('Erreur lors de la récupération du token:', err);
-    return null;
+    console.error('Erreur token FCM:', err);
   }
+  return null;
 };
 
 export const onMessageListener = (callback: (payload: any) => void) => {
   if (!messaging) return () => {};
   return onMessage(messaging, (payload) => {
-    console.log("Message reçu en premier plan:", payload);
     callback(payload);
   });
 };
+
+export default app;

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Car, 
   ChevronLeft, 
@@ -46,6 +46,7 @@ interface PlanningTabProps {
   cpCalculationMode: '25' | '30';
   modulationWeeks?: string;
   modulationStartDate?: string;
+  contractStartDate?: string;
   leaveBalances: { cp: number };
   initialCpBalance: number;
   setInitialCpBalance: (val: number) => void;
@@ -69,6 +70,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   cpCalculationMode,
   modulationWeeks,
   modulationStartDate,
+  contractStartDate,
   leaveBalances,
   initialCpBalance,
   setInitialCpBalance
@@ -183,6 +185,28 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     }
   };
 
+  const handleDeleteBreak = (shiftId: string, breakId: string) => {
+    setShifts(prev => prev.map(s => {
+      if (s.id === shiftId) {
+        return { ...s, breaks: s.breaks?.filter(b => b.id !== breakId) };
+      }
+      return s;
+    }));
+  };
+
+  const handleEditBreak = (shift: Shift, breakItem: Break) => {
+    setEditingShift({ ...shift });
+    setEditingBreakId(breakItem.id);
+    setTempBreak({
+      isActive: true,
+      start: breakItem.start,
+      duration: breakItem.duration,
+      location: breakItem.location as any,
+      type: breakItem.isMeal ? 'repas' : 'pause'
+    });
+    setShowEditModal(true);
+  };
+
   const addOrUpdateBreakInEditingShift = () => {
     if (!editingShift) return;
     const breakEndTime = calculateEndTimeFromDuration(tempBreak.start, tempBreak.duration);
@@ -247,17 +271,28 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   }, [editingShift]);
 
   const modulationPeriod = useMemo(() => {
-    if (workRegime !== 'modulation' || !modulationStartDate || !modulationWeeks) return null;
-    const start = new Date(modulationStartDate);
-    const weeks = parseInt(modulationWeeks);
-    if (isNaN(start.getTime()) || isNaN(weeks)) return null;
+    if (workRegime !== 'modulation' || !modulationWeeks) return null;
+    
+    const weeks = parseInt(modulationWeeks) || 4;
+    const cycleDays = weeks * 7;
+    const anchor = modulationStartDate ? new Date(modulationStartDate) : (contractStartDate ? new Date(contractStartDate) : new Date(2024, 0, 1));
+    anchor.setHours(0, 0, 0, 0);
+    
+    const diffMs = appCurrentTime.getTime() - anchor.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const currentCycleIndex = Math.floor(diffDays / cycleDays);
+    
+    const start = new Date(anchor);
+    start.setDate(anchor.getDate() + (currentCycleIndex * cycleDays));
+    
     const end = new Date(start);
-    end.setDate(start.getDate() + (weeks * 7) - 1);
+    end.setDate(start.getDate() + cycleDays - 1);
+    
     return {
       start: start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
       end: end.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
     };
-  }, [workRegime, modulationStartDate, modulationWeeks]);
+  }, [workRegime, modulationStartDate, modulationWeeks, contractStartDate, appCurrentTime]);
 
   const navigate = (direction: number) => {
     const newDate = new Date(pivotDate);
@@ -388,9 +423,17 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     if (!shift.start || shift.end === '--:--') return '0H 0M';
     const [h1, m1] = shift.start.split(':').map(Number);
     const [h2, m2] = shift.end.split(':').map(Number);
+    
     let durationMin = (h2 * 60 + m2) - (h1 * 60 + m1);
-    if (durationMin < 0) durationMin += 24 * 60;
-    if (shift.breaks) shift.breaks.forEach(b => durationMin -= b.duration);
+    // Correction pour le passage à minuit
+    if (durationMin < 0) durationMin += 1440;
+    
+    if (shift.breaks) {
+      shift.breaks.forEach(b => {
+        durationMin -= b.duration;
+      });
+    }
+    
     const h = Math.floor(Math.max(0, durationMin) / 60);
     const m = Math.max(0, durationMin) % 60;
     return `${h}H ${m}M`;
@@ -460,8 +503,8 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                     )}
                   </div>
                   <div className="flex items-center gap-1 pr-1">
-                    <button className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors"><Edit size={14} /></button>
-                    <button className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"><Trash2 size={14} /></button>
+                    <button onClick={() => handleEditBreak(shift, b)} className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors"><Edit size={14} /></button>
+                    <button onClick={() => handleDeleteBreak(shift.id, b.id)} className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"><Trash2 size={14} /></button>
                   </div>
                 </div>
               ))}

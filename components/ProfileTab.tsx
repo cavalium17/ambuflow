@@ -10,9 +10,12 @@ import {
   Building2, 
   Clock, 
   Zap, 
-  Trash2, 
+  TrendingUp,
+  Briefcase,
+  Trash2,
   Euro,
   ChevronRight,
+  Check,
   Star,
   FileBadge,
   Moon,
@@ -29,7 +32,7 @@ import {
   Camera,
   Loader2
 } from 'lucide-react';
-import { Shift, ActivityLog, UserStats } from '../types';
+import { Shift, ActivityLog, UserStats, UserRole } from '../types';
 import { storage } from '../src/firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -57,7 +60,6 @@ interface ProfileTabProps {
   followSystemTheme: boolean;
   setFollowSystemTheme: (val: boolean) => void;
   userStats: UserStats;
-  onLogout: () => void;
   onResetData: () => void;
   hasDea?: boolean;
   hasAux?: boolean;
@@ -67,16 +69,28 @@ interface ProfileTabProps {
   setWorkRegime?: (val: string) => void;
   modulationWeeks?: string;
   setModulationWeeks?: (val: string) => void;
+  modulationStartDate?: string;
+  setModulationStartDate?: (val: string) => void;
   hoursBase?: string;
   setHoursBase?: (val: string) => void;
   cpCalculationMode?: '25' | '30';
   setCpCalculationMode?: (val: string) => void;
   initialCpBalance: number;
   setInitialCpBalance: (val: number) => void;
+  weeklyContractHours: number;
+  setWeeklyContractHours: (val: number) => void;
+  overtimeMode: 'weekly' | 'biweekly' | 'modulation' | 'annualized';
+  setOvertimeMode: (val: 'weekly' | 'biweekly' | 'modulation' | 'annualized') => void;
+  payRateMode: '100_percent' | '90_percent';
+  setPayRateMode: (val: '100_percent' | '90_percent') => void;
   pushEnabled: boolean;
   setPushEnabled: (val: boolean) => void;
   autoGeo: boolean;
   setAutoGeo: (val: boolean) => void;
+  roles: UserRole[];
+  setRoles: (val: UserRole[]) => void;
+  primaryRole: UserRole | '';
+  setPrimaryRole: (val: UserRole | '') => void;
   afgsuDate?: string;
   medicalExpiryDate?: string;
   taxiFpcDate?: string;
@@ -105,7 +119,6 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   followSystemTheme,
   setFollowSystemTheme,
   userStats,
-  onLogout,
   onResetData,
   hasDea = false,
   hasAux = false,
@@ -115,16 +128,28 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   setWorkRegime,
   modulationWeeks = "4",
   setModulationWeeks,
+  modulationStartDate = "",
+  setModulationStartDate,
   hoursBase = "35",
   setHoursBase,
   cpCalculationMode = "25",
   setCpCalculationMode,
   initialCpBalance,
   setInitialCpBalance,
+  weeklyContractHours,
+  setWeeklyContractHours,
+  overtimeMode,
+  setOvertimeMode,
+  payRateMode,
+  setPayRateMode,
   pushEnabled,
   setPushEnabled,
   autoGeo,
   setAutoGeo,
+  roles = [],
+  setRoles,
+  primaryRole = '',
+  setPrimaryRole,
   afgsuDate = "",
   medicalExpiryDate = "",
   taxiFpcDate = "",
@@ -235,6 +260,23 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
     return items;
   }, [afgsuDate, medicalExpiryDate, hasDea, hasAux, hasTaxiCard, taxiFpcDate, taxiCardExpiryDate]);
 
+  const [isEditingRoles, setIsEditingRoles] = useState(false);
+
+  const toggleRole = (role: UserRole) => {
+    const newRoles = roles.includes(role) 
+      ? roles.filter(r => r !== role) 
+      : [...roles, role];
+    
+    if (newRoles.length > 0) {
+      setRoles(newRoles);
+      if (primaryRole && !newRoles.includes(primaryRole)) {
+        setPrimaryRole(newRoles[0]);
+      } else if (!primaryRole) {
+        setPrimaryRole(newRoles[0]);
+      }
+    }
+  };
+
   return (
     <div className="p-5 space-y-6 animate-fadeIn pb-32">
       
@@ -275,20 +317,71 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{jobTitle}</p>
           </div>
 
-          {/* Badges Diplômes */}
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            {hasDea && (
-              <span className="px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/5">DEA</span>
-            )}
-            {hasAux && (
-              <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/5">AUX</span>
-            )}
-            {hasTaxiCard && (
-              <span className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/5">TAXI</span>
-            )}
+          {/* Badges Diplômes / Rôles */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-wrap justify-center gap-2">
+              {roles.map(role => (
+                <span 
+                  key={role}
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg ${
+                    primaryRole === role 
+                      ? 'bg-indigo-500 text-white shadow-indigo-500/20' 
+                      : 'bg-slate-500/10 border border-white/5 text-slate-400'
+                  }`}
+                >
+                  {role === 'dea' ? 'DEA' : role === 'auxiliary' ? 'AUX' : 'TAXI'}
+                  {primaryRole === role && ' ★'}
+                </span>
+              ))}
+            </div>
+            <button 
+              onClick={() => setIsEditingRoles(true)}
+              className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-1 hover:opacity-80 transition-opacity"
+            >
+              <RefreshCw size={12} /> Modifier mes métiers
+            </button>
           </div>
         </div>
       </div>
+
+      {/* MODAL ÉDITION RÔLES */}
+      {isEditingRoles && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsEditingRoles(false)} />
+          <div className={`relative w-full max-w-sm p-8 rounded-[40px] border ${darkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200'} shadow-2xl animate-scaleIn`}>
+            <h3 className={`text-xl font-black mb-6 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Modifier vos métiers</h3>
+            
+            <div className="space-y-4 mb-8">
+              {[
+                { id: 'dea', label: 'Ambulancier DEA', icon: ShieldCheck },
+                { id: 'auxiliary', label: 'Auxiliaire Ambulancier', icon: Users },
+                { id: 'taxi', label: 'Chauffeur de Taxi', icon: Car }
+              ].map((role) => (
+                <button
+                  key={role.id}
+                  onClick={() => toggleRole(role.id as UserRole)}
+                  className={`w-full p-4 rounded-2xl border-2 flex items-center gap-4 transition-all ${
+                    roles.includes(role.id as UserRole) 
+                      ? 'bg-indigo-500/10 border-indigo-500 text-indigo-500' 
+                      : 'bg-transparent border-slate-800 text-slate-500'
+                  }`}
+                >
+                  <role.icon size={20} />
+                  <span className="font-bold">{role.label}</span>
+                  {roles.includes(role.id as UserRole) && <Check size={18} className="ml-auto" />}
+                </button>
+              ))}
+            </div>
+
+            <button 
+              onClick={() => setIsEditingRoles(false)}
+              className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs"
+            >
+              Terminer
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* SECTION CONTRAT */}
       <div className={`${bentoCardBase} p-8`}>
@@ -307,15 +400,76 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           <div className="h-px bg-white/5 w-full" />
 
           <div className="grid grid-cols-1 gap-4">
+            {/* Base Hebdomadaire */}
             <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
               <div className="flex items-center gap-3">
-                <Zap size={16} className="text-indigo-500" />
-                <span className="text-xs font-black uppercase tracking-widest text-slate-400">Régime</span>
+                <Clock size={16} className="text-indigo-500" />
+                <span className="text-xs font-black uppercase tracking-widest text-slate-400">Base Hebdo</span>
               </div>
-              <span className="text-sm font-black text-white">
-                {workRegimeLabels[workRegime] || workRegime}
-                {workRegime === 'modulation' && ` ${modulationWeeks} semaines`}
-              </span>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number"
+                  value={weeklyContractHours}
+                  onChange={(e) => setWeeklyContractHours(Number(e.target.value))}
+                  className={`bg-transparent text-sm font-black text-right w-12 outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+                />
+                <span className="text-xs font-bold text-slate-500">h</span>
+              </div>
+            </div>
+
+            {/* Mode Heures Supp */}
+            <div className="flex flex-col gap-3 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <TrendingUp size={16} className="text-indigo-500" />
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Calcul Heures Supp.</span>
+                </div>
+                <select 
+                  value={overtimeMode}
+                  onChange={(e) => {
+                    const mode = e.target.value as any;
+                    setOvertimeMode(mode);
+                    if (mode === 'modulation') setWorkRegime('modulation');
+                    else setWorkRegime('weekly');
+                  }}
+                  className={`bg-transparent text-sm font-black text-right outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+                >
+                  <option value="weekly">Hebdomadaire</option>
+                  <option value="biweekly">Quinzaine</option>
+                  <option value="modulation">Modulation</option>
+                  <option value="annualized">Annuel</option>
+                </select>
+              </div>
+              {overtimeMode === 'modulation' && (
+                <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cycle (semaines)</span>
+                  <select 
+                    value={modulationWeeks}
+                    onChange={(e) => setModulationWeeks(e.target.value)}
+                    className={`bg-transparent text-xs font-black text-right outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+                  >
+                    <option value="4">4 semaines</option>
+                    <option value="8">8 semaines</option>
+                    <option value="12">12 semaines</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Mode Rémunération */}
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+              <div className="flex items-center gap-3">
+                <Briefcase size={16} className="text-indigo-500" />
+                <span className="text-xs font-black uppercase tracking-widest text-slate-400">Rémunération</span>
+              </div>
+              <select 
+                value={payRateMode}
+                onChange={(e) => setPayRateMode(e.target.value as any)}
+                className={`bg-transparent text-sm font-black text-right outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+              >
+                <option value="100_percent">100%</option>
+                <option value="90_percent">90%</option>
+              </select>
             </div>
 
             <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
@@ -323,7 +477,15 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                 <Euro size={16} className="text-emerald-500" />
                 <span className="text-xs font-black uppercase tracking-widest text-slate-400">Taux horaire</span>
               </div>
-              <span className="text-sm font-black text-emerald-500">{hourlyRate}€/h</span>
+              <div className="flex items-center gap-1">
+                <input 
+                  type="text"
+                  value={hourlyRate}
+                  onChange={(e) => setHourlyRate?.(e.target.value)}
+                  className={`bg-transparent text-sm font-black text-right w-16 outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+                />
+                <span className="text-sm font-black text-emerald-500">€/h</span>
+              </div>
             </div>
           </div>
 
@@ -399,7 +561,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 
       {/* ACTIONS */}
       <div className="space-y-4">
-        <button onClick={onLogout} className={`${bentoCardBase} w-full p-6 flex items-center justify-between group active:scale-[0.98]`}><div className="flex items-center gap-4"><div className="p-3 rounded-2xl bg-slate-500/10 text-slate-500"><LogOut size={20} /></div><span className="font-black uppercase tracking-widest text-xs">Fermer la session</span></div><ChevronRight size={20} className="text-slate-500" /></button>
+        {/* Logout button removed */}
       </div>
     </div>
   );

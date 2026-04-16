@@ -1,604 +1,561 @@
 
-import React, { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
-  User, 
-  Camera, 
   ChevronRight, 
   ChevronLeft, 
   Check, 
-  Building2, 
-  Calendar, 
-  Euro, 
-  Clock, 
-  Zap, 
-  ShieldCheck, 
+  Stethoscope, 
+  Users, 
   Car, 
-  Users,
-  Loader2,
-  CheckCircle2
+  MapPin, 
+  Bell, 
+  Sparkles,
+  Play,
+  Calendar,
+  Briefcase,
+  User
 } from 'lucide-react';
-import { auth, db, storage } from '../src/firebaseConfig';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc } from 'firebase/firestore';
+import { UserRole, UserProfile } from '../types';
 
 interface OnboardingProps {
-  onComplete: (data: any) => void;
+  onComplete: (profile: Partial<UserProfile>) => void;
 }
 
-const steps = [
-  { id: 1, title: 'Identité' },
-  { id: 2, title: 'Qualification' },
-  { id: 3, title: 'Contexte Pro' },
-  { id: 4, title: 'Régime de Temps' },
-  { id: 5, title: 'Récapitulatif' }
-];
-
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState(0);
+  const [roles, setRoles] = useState<UserRole[]>([]);
+  const [primaryRole, setPrimaryRole] = useState<UserRole | ''>('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [contractType, setContractType] = useState('CDI');
+  const [weeklyContractHours, setWeeklyContractHours] = useState(35);
+  const [overtimeMode, setOvertimeMode] = useState<'weekly' | 'biweekly' | 'modulation' | 'annualized'>('weekly');
+  const [modulationWeeks, setModulationWeeks] = useState(4);
+  const [payRateMode, setPayRateMode] = useState<'100_percent' | '90_percent'>('100_percent');
+  const [contractStartDate, setContractStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [autoGeo, setAutoGeo] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(true);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    profileImage: '',
-    qualifications: [] as string[],
-    deaDate: '',
-    auxDate: '',
-    taxiDate: '',
-    companyName: '',
-    contractStartDate: '',
-    hourlyRate: '12.79',
-    workRegime: 'weekly',
-    modulationWeeks: '4',
-    monthlyHours: '151.67',
-    leaveCalculation: '25'
-  });
+  const steps = [
+    'Value Prop',
+    'Identité',
+    'Métiers',
+    'Priorité',
+    'Contrat',
+    'Permissions',
+    'Activation'
+  ];
 
-  const handleNext = async () => {
-    setValidationError(null);
-    
-    // Validation logic for each step
-    if (currentStep === 1) {
-      if (!formData.firstName.trim() && !formData.lastName.trim()) {
-        setValidationError("Veuillez remplir au moins votre nom ou votre prénom.");
-        return;
-      }
-    }
-    // All other steps are now non-blocking as requested
+  const nextStep = () => setStep(prev => Math.min(prev + 1, steps.length - 1));
+  const prevStep = () => setStep(prev => Math.max(prev - 1, 0));
 
-    if (currentStep < steps.length) {
-      setCurrentStep(prev => prev + 1);
-    } else {
-      // On the last step, handleNext calls handleFinalSubmit
-      await handleFinalSubmit();
-    }
-  };
-  const handlePrev = () => {
-    setValidationError(null);
-    setCurrentStep(prev => Math.max(prev - 1, 1));
+  const toggleRole = (role: UserRole) => {
+    setRoles(prev => 
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    );
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !auth.currentUser) return;
-
-    setIsUploading(true);
-    try {
-      const storageRef = ref(storage, `profiles/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      setFormData(prev => ({ ...prev, profileImage: url }));
-    } catch (error) {
-      console.error("Upload error:", error);
-    } finally {
-      setIsUploading(false);
-    }
+  const handleComplete = () => {
+    onComplete({
+      firstName,
+      lastName,
+      companyName,
+      onboarded: true,
+      roles,
+      primaryRole: primaryRole as UserRole,
+      contractType,
+      weeklyContractHours,
+      overtimeMode,
+      modulationWeeks,
+      payRateMode,
+      contractStartDate,
+      autoGeo,
+      pushEnabled
+    });
   };
 
-  const toggleQualification = (qual: string) => {
-    setFormData(prev => ({
-      ...prev,
-      qualifications: prev.qualifications.includes(qual)
-        ? prev.qualifications.filter(q => q !== qual)
-        : [...prev.qualifications, qual]
-    }));
-  };
-
-  const handleFinalSubmit = async () => {
-    if (!auth.currentUser) return;
-    setIsSaving(true);
-    try {
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      const profileData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        userName: `${formData.firstName} ${formData.lastName}`.trim(),
-        profileImage: formData.profileImage,
-        qualifications: formData.qualifications,
-        deaDate: formData.deaDate,
-        auxDate: formData.auxDate,
-        taxiDate: formData.taxiDate,
-        companyName: formData.companyName,
-        contractStartDate: formData.contractStartDate,
-        hourlyRate: formData.hourlyRate,
-        workRegime: formData.workRegime,
-        modulationWeeks: formData.modulationWeeks,
-        monthlyHours: formData.monthlyHours,
-        leaveCalculation: formData.leaveCalculation,
-        hasDea: formData.qualifications.includes('dea'),
-        hasAux: formData.qualifications.includes('aux'),
-        hasTaxiCard: formData.qualifications.includes('taxi'),
-        onboarded: true,
-        updatedAt: new Date().toISOString()
-      };
-      await setDoc(userRef, profileData, { merge: true });
-      onComplete(profileData);
-    } catch (error) {
-      console.error("Save error:", error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-8"
-          >
-            <div className="flex flex-col items-center gap-6">
-              <div 
-                className="relative group cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 animate-pulse" />
-                <div className="relative w-32 h-32 rounded-[40px] p-1 bg-gradient-to-tr from-indigo-500 to-emerald-500">
-                  <div className="w-full h-full rounded-[38px] overflow-hidden bg-slate-900 flex items-center justify-center">
-                    {isUploading ? (
-                      <Loader2 className="animate-spin text-indigo-500" size={32} />
-                    ) : formData.profileImage ? (
-                      <img src={formData.profileImage} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                      <User size={48} className="text-slate-700" />
-                    )}
-                  </div>
-                  <div className="absolute -right-2 -bottom-2 bg-indigo-600 text-white p-2.5 rounded-2xl shadow-xl border-4 border-slate-950">
-                    <Camera size={18} />
-                  </div>
-                </div>
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange} 
-                  className="hidden" 
-                  accept="image/*"
-                />
-              </div>
-
-              <AnimatePresence mode="wait">
-                {formData.firstName && (
-                  <motion.p 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-indigo-400 font-black uppercase tracking-widest text-xs text-center"
-                  >
-                    Enchanté {formData.firstName}, configurons votre outil de bord.
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Prénom</label>
-                <input 
-                  type="text"
-                  value={formData.firstName}
-                  onChange={e => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                  className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-all"
-                  placeholder="Ex: Jean"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Nom</label>
-                <input 
-                  type="text"
-                  value={formData.lastName}
-                  onChange={e => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                  className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-all"
-                  placeholder="Ex: Dupont"
-                />
-              </div>
-            </div>
-          </motion.div>
-        );
-
-      case 2:
-        return (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="text-center space-y-2 mb-8">
-              <motion.p 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-indigo-400 font-black uppercase tracking-widest text-[10px]"
-              >
-                Bonjour {formData.firstName} !
-              </motion.p>
-              <h3 className="text-xl font-black text-white uppercase tracking-tight">Vos Qualifications</h3>
-              <p className="text-slate-500 text-xs font-medium">Sélectionnez tous vos diplômes actifs.</p>
-            </div>
-
-            <div className="space-y-4">
-              {[
-                { id: 'dea', label: "Diplôme d'État d'Ambulancier (DEA)", icon: ShieldCheck, color: 'emerald', dateKey: 'deaDate' },
-                { id: 'aux', label: "Certificat d'Auxiliaire Ambulancier", icon: Users, color: 'amber', dateKey: 'auxDate' },
-                { id: 'taxi', label: "Carte Professionnelle Taxi", icon: Car, color: 'blue', dateKey: 'taxiDate' }
-              ].map(qual => (
-                <div key={qual.id} className="space-y-2">
-                  <button
-                    onClick={() => toggleQualification(qual.id)}
-                    className={`w-full flex items-center gap-4 p-6 rounded-3xl border-2 transition-all ${
-                      formData.qualifications.includes(qual.id)
-                        ? `bg-${qual.color}-500/10 border-${qual.color}-500 text-white shadow-lg shadow-${qual.color}-500/20`
-                        : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className={`p-3 rounded-2xl ${
-                      formData.qualifications.includes(qual.id) ? `bg-${qual.color}-500 text-white` : 'bg-slate-800 text-slate-600'
-                    }`}>
-                      <qual.icon size={24} />
-                    </div>
-                    <span className="flex-1 text-left font-black uppercase tracking-tight text-sm leading-tight">
-                      {qual.label}
-                    </span>
-                    {formData.qualifications.includes(qual.id) && (
-                      <div className={`w-6 h-6 rounded-full bg-${qual.color}-500 flex items-center justify-center text-white`}>
-                        <Check size={14} strokeWidth={4} />
-                      </div>
-                    )}
-                  </button>
-                  
-                  {formData.qualifications.includes(qual.id) && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      className="px-4 pb-2"
-                    >
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Date d'obtention</label>
-                      <input 
-                        type="date"
-                        value={(formData as any)[qual.dateKey]}
-                        onChange={e => setFormData(prev => ({ ...prev, [qual.dateKey]: e.target.value }))}
-                        className="w-full bg-slate-900/50 border border-slate-800 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-indigo-500 transition-all"
-                      />
-                    </motion.div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        );
-
-      case 3:
-        return (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="text-center space-y-2 mb-4">
-              <p className="text-indigo-400 font-black uppercase tracking-widest text-[10px]">
-                Presque fini, {formData.firstName} !
-              </p>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
-                  <Building2 size={14} /> Société
-                </label>
-                <input 
-                  type="text"
-                  value={formData.companyName}
-                  onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
-                  className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-all"
-                  placeholder="Nom de l'entreprise"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
-                  <Calendar size={14} /> Date d'entrée
-                </label>
-                <input 
-                  type="date"
-                  value={formData.contractStartDate}
-                  onChange={e => setFormData(prev => ({ ...prev, contractStartDate: e.target.value }))}
-                  className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-all"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1 flex items-center gap-2">
-                  <Euro size={14} /> Taux horaire brut
-                </label>
-                <div className="relative">
-                  <input 
-                    type="number"
-                    step="0.01"
-                    value={formData.hourlyRate}
-                    onChange={e => setFormData(prev => ({ ...prev, hourlyRate: e.target.value }))}
-                    className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-all pr-12"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">€</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        );
-
-      case 4:
-        return (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-8"
-          >
-            <div className="text-center space-y-2 mb-4">
-              <p className="text-indigo-400 font-black uppercase tracking-widest text-[10px]">
-                Dernière ligne droite, {formData.firstName} !
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { id: 'weekly', label: 'Hebdo', icon: Clock },
-                { id: 'fortnightly', label: 'Quinzaine', icon: Calendar },
-                { id: 'modulation', label: 'Modulation', icon: Zap },
-                { id: 'annualization', label: 'Annuel', icon: CheckCircle2 }
-              ].map(regime => (
-                <button
-                  key={regime.id}
-                  onClick={() => setFormData(prev => ({ ...prev, workRegime: regime.id }))}
-                  className={`flex flex-col items-center justify-center p-6 rounded-3xl border-2 transition-all gap-3 ${
-                    formData.workRegime === regime.id
-                      ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20'
-                      : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
-                  }`}
-                >
-                  <regime.icon size={24} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">{regime.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {formData.workRegime === 'modulation' && (
-              <div className="space-y-6 pt-4 animate-in fade-in slide-in-from-top-4 duration-300">
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block text-center">
-                    Cycle de modulation (semaines)
-                  </label>
-                  
-                  <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar px-2">
-                    {[4, 5, 6, 7, 8, 9, 10, 11, 12].map((weeks) => {
-                      const isSelected = formData.modulationWeeks === weeks.toString();
-                      return (
-                        <motion.button
-                          key={weeks}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => setFormData(prev => ({ ...prev, modulationWeeks: weeks.toString() }))}
-                          className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all border-2 ${
-                            isSelected 
-                              ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/40' 
-                              : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
-                          }`}
-                        >
-                          {weeks}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="text-center space-y-2">
-                    <p className="text-indigo-400 font-black text-[10px] uppercase tracking-widest">
-                      Calcul de votre cycle sur {formData.modulationWeeks} semaines
-                    </p>
-                    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 inline-block w-full">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Seuil heures sup.</span>
-                        <span className="text-white font-bold text-sm">
-                          {parseInt(formData.modulationWeeks) * 35}h
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Volume mensuel (h)</label>
-                <input 
-                  type="number"
-                  step="0.01"
-                  value={formData.monthlyHours}
-                  onChange={e => setFormData(prev => ({ ...prev, monthlyHours: e.target.value }))}
-                  className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-all"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Calcul des congés</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setFormData(prev => ({ ...prev, leaveCalculation: '25' }))}
-                    className={`p-4 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${
-                      formData.leaveCalculation === '25' ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-slate-900 border-slate-800 text-slate-500'
-                    }`}
-                  >
-                    25 Jours Ouvrés
-                  </button>
-                  <button
-                    onClick={() => setFormData(prev => ({ ...prev, leaveCalculation: '30' }))}
-                    className={`p-4 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${
-                      formData.leaveCalculation === '30' ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-slate-900 border-slate-800 text-slate-500'
-                    }`}
-                  >
-                    30 Jours Ouvrables
-                  </button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        );
-
-      case 5:
-        return (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="text-center space-y-2 mb-4">
-              <p className="text-indigo-400 font-black uppercase tracking-widest text-[10px]">
-                C'est parfait, {formData.firstName} !
-              </p>
-            </div>
-            <div className="bg-slate-900/50 rounded-[32px] border border-slate-800 p-6 space-y-6">
-              <div className="flex items-center gap-4 border-b border-slate-800 pb-6">
-                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-800">
-                  {formData.profileImage ? (
-                    <img src={formData.profileImage} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <User size={32} className="text-slate-700 m-auto h-full" />
-                  )}
-                </div>
-                <div>
-                  <h4 className="text-white font-black uppercase tracking-tight">{formData.firstName} {formData.lastName}</h4>
-                  <p className="text-indigo-400 text-[10px] font-black uppercase tracking-widest">
-                    {formData.qualifications.map(q => q.toUpperCase()).join(' • ')}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Société</span>
-                  <p className="text-white font-bold text-sm">{formData.companyName || 'Non spécifié'}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Taux Horaire</span>
-                  <p className="text-white font-bold text-sm">{formData.hourlyRate} €/h</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Régime</span>
-                  <p className="text-white font-bold text-sm capitalize">{formData.workRegime}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Base Mensuelle</span>
-                  <p className="text-white font-bold text-sm">{formData.monthlyHours}h</p>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-800">
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Congés Payés</span>
-                  <span className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">{formData.leaveCalculation} Jours</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        );
-
-      default:
-        return null;
-    }
+  const containerVariants = {
+    initial: { opacity: 0, x: 20 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -20 }
   };
 
   return (
-    <div className="h-screen bg-slate-950 text-slate-100 flex flex-col overflow-y-auto no-scrollbar p-6 pb-24 font-sans">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-12">
-        <img 
-          src="https://ambuflow-delta.vercel.app/pwa-512x512.png" 
-          alt="Logo" 
-          className="w-10 h-10 rounded-xl"
-        />
-        <div className="flex gap-1">
-          {steps.map(step => (
-            <div 
-              key={step.id}
-              className={`h-1 rounded-full transition-all duration-500 ${
-                currentStep >= step.id ? 'w-8 bg-indigo-500' : 'w-4 bg-slate-800'
-              }`}
-            />
-          ))}
-        </div>
+    <div className="fixed inset-0 bg-slate-950 z-50 flex flex-col overflow-hidden">
+      {/* Progress Bar */}
+      <div className="h-1.5 w-full bg-slate-900 flex">
+        {steps.map((_, i) => (
+          <div 
+            key={i} 
+            className={`h-full flex-1 transition-all duration-500 ${i <= step ? 'bg-indigo-500' : 'bg-transparent'}`}
+          />
+        ))}
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 max-w-md mx-auto w-full">
-        <div className="max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
-          <AnimatePresence mode="wait">
-            {renderStep()}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* Footer Navigation */}
-      <div className="mt-8 flex flex-col gap-4 max-w-md mx-auto w-full">
-        <AnimatePresence>
-          {validationError && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-rose-400 text-[10px] font-black uppercase tracking-widest text-center"
+      <div className="flex-1 flex flex-col p-6 relative">
+        <AnimatePresence mode="wait">
+          {step === 0 && (
+            <motion.div 
+              key="step0"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex-1 flex flex-col justify-center items-center text-center space-y-8"
             >
-              {validationError}
+              <div className="w-24 h-24 bg-indigo-500/20 rounded-[32px] flex items-center justify-center">
+                <Sparkles className="text-indigo-500" size={48} />
+              </div>
+              <div className="space-y-4">
+                <h1 className="text-4xl font-black text-white tracking-tight leading-tight">
+                  Bienvenue sur <span className="text-indigo-500">AmbuFlow</span>
+                </h1>
+                <p className="text-slate-400 text-lg leading-relaxed max-w-xs mx-auto">
+                  L'assistant intelligent qui gère vos heures et vos indemnités automatiquement.
+                </p>
+              </div>
+              <button 
+                onClick={nextStep}
+                className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-sm shadow-lg shadow-indigo-500/20"
+              >
+                C'est parti
+              </button>
+            </motion.div>
+          )}
+
+          {step === 1 && (
+            <motion.div 
+              key="step1"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex-1 flex flex-col"
+            >
+              <div className="mt-8 mb-12">
+                <h2 className="text-3xl font-black text-white tracking-tight mb-2">Enchanté !</h2>
+                <p className="text-slate-400">Commençons par faire connaissance.</p>
+              </div>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Prénom</label>
+                  <input 
+                    type="text" 
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Ex: Jean"
+                    className="w-full bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Nom</label>
+                  <input 
+                    type="text" 
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Ex: Dupont"
+                    className="w-full bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Entreprise (Optionnel)</label>
+                  <input 
+                    type="text" 
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="Ex: Ambulances 24/7"
+                    className="w-full bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+              </div>
+              <div className="mt-auto pt-8 flex gap-4 flex-shrink-0">
+                <button onClick={prevStep} className="p-5 bg-slate-900 text-white rounded-2xl"><ChevronLeft /></button>
+                <button 
+                  onClick={nextStep} 
+                  className="flex-1 py-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-sm"
+                >
+                  Continuer
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 2 && (
+            <motion.div 
+              key="step2"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex-1 flex flex-col"
+            >
+              <div className="mt-8 mb-8">
+                <h2 className="text-3xl font-black text-white tracking-tight mb-2">Votre métier ?</h2>
+                <p className="text-slate-400">Sélectionnez un ou plusieurs rôles.</p>
+              </div>
+              <div className="space-y-4">
+                {[
+                  { id: 'dea', label: 'Ambulancier DEA', icon: Stethoscope, color: 'indigo' },
+                  { id: 'auxiliary', label: 'Auxiliaire Ambulancier', icon: Users, color: 'emerald' },
+                  { id: 'taxi', label: 'Chauffeur de Taxi', icon: Car, color: 'amber' }
+                ].map((role) => {
+                  const isActive = roles.includes(role.id as UserRole);
+                  const colorClasses = {
+                    indigo: isActive ? 'bg-indigo-500/10 border-indigo-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400',
+                    emerald: isActive ? 'bg-emerald-500/10 border-emerald-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400',
+                    amber: isActive ? 'bg-amber-500/10 border-amber-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }[role.color as 'indigo' | 'emerald' | 'amber'];
+
+                  const iconColorClasses = {
+                    indigo: isActive ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-500',
+                    emerald: isActive ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-500',
+                    amber: isActive ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-500'
+                  }[role.color as 'indigo' | 'emerald' | 'amber'];
+
+                  return (
+                    <button
+                      key={role.id}
+                      onClick={() => toggleRole(role.id as UserRole)}
+                      className={`w-full p-6 rounded-[24px] border-2 flex items-center gap-4 transition-all ${colorClasses}`}
+                    >
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${iconColorClasses}`}>
+                        <role.icon size={24} />
+                      </div>
+                      <span className="font-bold text-lg">{role.label}</span>
+                      {isActive && <Check className="ml-auto text-indigo-500" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-auto pt-8 flex gap-4 flex-shrink-0">
+                <button onClick={prevStep} className="p-5 bg-slate-900 text-white rounded-2xl"><ChevronLeft /></button>
+                <button 
+                  onClick={() => {
+                    if (roles.length > 1) {
+                      nextStep();
+                    } else {
+                      setPrimaryRole(roles[0]);
+                      setStep(4);
+                    }
+                  }} 
+                  disabled={roles.length === 0}
+                  className="flex-1 py-5 bg-indigo-600 disabled:opacity-50 text-white font-black rounded-2xl uppercase tracking-widest text-sm"
+                >
+                  Suivant
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 3 && (
+            <motion.div 
+              key="step3"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex-1 flex flex-col"
+            >
+              <div className="mt-8 mb-8">
+                <h2 className="text-3xl font-black text-white tracking-tight mb-2">Activité principale</h2>
+                <p className="text-slate-400">Celle que vous pratiquez le plus souvent.</p>
+              </div>
+              <div className="space-y-4">
+                {roles.map((roleId) => {
+                  const roleInfo = {
+                    dea: { label: 'Ambulancier DEA', icon: Stethoscope },
+                    auxiliary: { label: 'Auxiliaire Ambulancier', icon: Users },
+                    taxi: { label: 'Chauffeur de Taxi', icon: Car }
+                  }[roleId];
+                  return (
+                    <button
+                      key={roleId}
+                      onClick={() => setPrimaryRole(roleId)}
+                      className={`w-full p-6 rounded-[24px] border-2 flex items-center gap-4 transition-all ${
+                        primaryRole === roleId 
+                          ? 'bg-indigo-500/10 border-indigo-500 text-white' 
+                          : 'bg-slate-900 border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                        primaryRole === roleId ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-500'
+                      }`}>
+                        <roleInfo.icon size={24} />
+                      </div>
+                      <span className="font-bold text-lg">{roleInfo.label}</span>
+                      {primaryRole === roleId && <div className="ml-auto w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={14} className="text-white" /></div>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-auto pt-8 flex gap-4 flex-shrink-0">
+                <button onClick={prevStep} className="p-5 bg-slate-900 text-white rounded-2xl"><ChevronLeft /></button>
+                <button 
+                  onClick={nextStep} 
+                  disabled={!primaryRole}
+                  className="flex-1 py-5 bg-indigo-600 disabled:opacity-50 text-white font-black rounded-2xl uppercase tracking-widest text-sm"
+                >
+                  Confirmer
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 4 && (
+            <motion.div 
+              key="step4"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex-1 flex flex-col"
+            >
+              <div className="mt-8 mb-6">
+                <h2 className="text-3xl font-black text-white tracking-tight mb-2">Votre contrat</h2>
+                <p className="text-slate-400">Configuration précise de votre temps de travail.</p>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-6 custom-scrollbar">
+                {/* Base Hebdomadaire */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-end ml-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Base hebdomadaire</label>
+                    <span className="text-indigo-400 font-black text-xl">{weeklyContractHours}h</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[35, 39].map(h => (
+                      <button
+                        key={h}
+                        onClick={() => setWeeklyContractHours(h)}
+                        className={`py-4 rounded-xl font-bold text-xs transition-all ${
+                          weeklyContractHours === h ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                        }`}
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                    <div className="relative">
+                      <input 
+                        type="number"
+                        placeholder="Autre"
+                        value={weeklyContractHours !== 35 && weeklyContractHours !== 39 ? weeklyContractHours : ''}
+                        onChange={(e) => setWeeklyContractHours(Number(e.target.value))}
+                        className={`w-full py-4 rounded-xl font-bold text-xs text-center outline-none transition-all ${
+                          weeklyContractHours !== 35 && weeklyContractHours !== 39 ? 'bg-indigo-600 text-white border-transparent' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic ml-1">“Vos heures supplémentaires seront calculées automatiquement selon cette base”</p>
+                </div>
+
+                {/* Mode de Calcul */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Mode de calcul des heures supp.</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'weekly', label: 'Hebdo' },
+                      { id: 'biweekly', label: 'Quinzaine' },
+                      { id: 'modulation', label: 'Modulation' },
+                      { id: 'annualized', label: 'Annuel' }
+                    ].map(mode => (
+                      <button
+                        key={mode.id}
+                        onClick={() => setOvertimeMode(mode.id as any)}
+                        className={`py-4 rounded-xl font-bold text-xs transition-all ${
+                          overtimeMode === mode.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      {overtimeMode === 'weekly' && "Calcul classique à la semaine (au delà de votre base)."}
+                      {overtimeMode === 'biweekly' && "Calcul lissé sur 2 semaines consécutives."}
+                      {overtimeMode === 'modulation' && "Le mode de modulation permet de lisser vos heures sur plusieurs semaines."}
+                      {overtimeMode === 'annualized' && "Calcul basé sur le total d'heures annuel (1607h)."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Durée de Modulation (Conditionnel) */}
+                {overtimeMode === 'modulation' && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-3"
+                  >
+                    <div className="flex justify-between items-center ml-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Durée de la modulation</label>
+                      <span className="text-indigo-400 font-black text-sm">{modulationWeeks} semaines</span>
+                    </div>
+                    <div className="px-2 py-4 bg-slate-900 border border-slate-800 rounded-2xl">
+                      <input 
+                        type="range"
+                        min="4"
+                        max="12"
+                        step="1"
+                        value={modulationWeeks}
+                        onChange={(e) => setModulationWeeks(Number(e.target.value))}
+                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                      <div className="flex justify-between mt-2 px-1">
+                        <span className="text-[10px] font-bold text-slate-600">4 sem.</span>
+                        <span className="text-[10px] font-bold text-slate-600">12 sem.</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Mode de Rémunération */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Mode de rémunération</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: '100_percent', label: '100%' },
+                      { id: '90_percent', label: '90%' }
+                    ].map(mode => (
+                      <button
+                        key={mode.id}
+                        onClick={() => setPayRateMode(mode.id as any)}
+                        className={`py-4 rounded-xl font-bold text-xs transition-all ${
+                          payRateMode === mode.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-slate-900 text-slate-500 border border-slate-800'
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic ml-1">
+                    {payRateMode === '90_percent' ? "“Le mode 90% signifie que seule une partie de votre temps de travail est rémunérée”" : "“100% de votre temps de travail effectif est rémunéré”"}
+                  </p>
+                </div>
+
+                {/* Date d'entrée */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Date d'entrée dans l'entreprise</label>
+                  <input 
+                    type="date" 
+                    value={contractStartDate}
+                    onChange={(e) => setContractStartDate(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 flex gap-4 flex-shrink-0">
+                <button onClick={() => setStep(roles.length > 1 ? 3 : 2)} className="p-5 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 transition-colors"><ChevronLeft /></button>
+                <button 
+                  onClick={nextStep} 
+                  className="flex-1 py-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-sm shadow-xl shadow-indigo-600/20 active:scale-[0.98] transition-all"
+                >
+                  Suivant
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 5 && (
+            <motion.div 
+              key="step5"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex-1 flex flex-col"
+            >
+              <div className="mt-8 mb-8">
+                <h2 className="text-3xl font-black text-white tracking-tight mb-2">Super-pouvoirs</h2>
+                <p className="text-slate-400">Optimisez votre expérience.</p>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+                <div className="p-6 bg-slate-900 border border-slate-800 rounded-[24px] flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-emerald-500">
+                      <MapPin size={24} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-white">Géolocalisation</p>
+                      <p className="text-xs text-slate-500">Automatise vos lieux de service</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setAutoGeo(!autoGeo)}
+                    className={`w-14 h-8 rounded-full transition-all relative ${autoGeo ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                  >
+                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${autoGeo ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+                <div className="p-6 bg-slate-900 border border-slate-800 rounded-[24px] flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-amber-500/20 rounded-2xl flex items-center justify-center text-amber-500">
+                      <Bell size={24} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-white">Notifications</p>
+                      <p className="text-xs text-slate-500">Rappels de fin de service</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setPushEnabled(!pushEnabled)}
+                    className={`w-14 h-8 rounded-full transition-all relative ${pushEnabled ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                  >
+                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${pushEnabled ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+              </div>
+              <div className="mt-6 pt-4 flex gap-4 flex-shrink-0">
+                <button onClick={prevStep} className="p-5 bg-slate-900 text-white rounded-2xl"><ChevronLeft /></button>
+                <button 
+                  onClick={nextStep} 
+                  className="flex-1 py-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-sm"
+                >
+                  Terminer
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 6 && (
+            <motion.div 
+              key="step6"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex-1 flex flex-col justify-center items-center text-center space-y-12"
+            >
+              <div className="relative">
+                <motion.div 
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center"
+                >
+                  <Play className="text-indigo-500 fill-indigo-500" size={48} />
+                </motion.div>
+                <div className="absolute -top-2 -right-2 bg-emerald-500 text-white p-2 rounded-full">
+                  <Check size={20} />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <h2 className="text-4xl font-black text-white tracking-tight">C'est prêt !</h2>
+                <p className="text-slate-400 text-lg max-w-xs mx-auto">
+                  Votre profil est configuré. Vous pouvez maintenant démarrer votre première journée.
+                </p>
+              </div>
+              <button 
+                onClick={handleComplete}
+                className="w-full py-6 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-sm shadow-xl shadow-indigo-500/40"
+              >
+                Accéder à mon Board
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
-        
-        <div className="flex justify-between items-center">
-          <button
-            onClick={handlePrev}
-            disabled={currentStep === 1 || isSaving}
-            className={`p-4 rounded-2xl border-2 border-slate-800 text-slate-500 transition-all ${
-              currentStep === 1 ? 'opacity-0 pointer-events-none' : 'hover:bg-slate-900'
-            } disabled:opacity-50`}
-          >
-            <ChevronLeft size={24} />
-          </button>
-          
-          <button
-            onClick={handleNext}
-            disabled={isSaving}
-            className="flex items-center gap-3 bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50"
-          >
-            {isSaving ? (
-              <Loader2 className="animate-spin" size={20} />
-            ) : currentStep === 5 ? (
-              <>Valider <Check size={20} /></>
-            ) : (
-              <>Suivant <ChevronRight size={20} /></>
-            )}
-          </button>
-        </div>
       </div>
     </div>
   );

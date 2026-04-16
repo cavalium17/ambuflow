@@ -39,15 +39,18 @@
         "modulationStartDate": { "type": "string" },
         "modulationWeeks": { "type": "string" },
         "initialCpBalance": { "type": "number" },
+        "weeklyContractHours": { "type": "number" },
+        "overtimeMode": { "type": "string", "enum": ["weekly", "biweekly", "modulation", "annualized"] },
+        "modulationWeeks": { "type": "number" },
+        "payRateMode": { "type": "string", "enum": ["100_percent", "90_percent"] },
         "customHours": { "type": "string" },
         "followSystemTheme": { "type": "boolean" },
         "pushEnabled": { "type": "boolean" },
-        "onboarded": { "type": "boolean" },
         "shifts": { "type": "array", "items": { "type": "object" } },
         "logs": { "type": "array", "items": { "type": "object" } },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userName", "onboarded"]
+      "required": ["userName"]
     },
     "Shift": {
       "title": "Shift",

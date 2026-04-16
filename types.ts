@@ -31,6 +31,7 @@ export interface Shift {
   crew: string;
   vehicle: string;
   breaks?: Break[];
+  preciseStart?: string; // ISO string for exact start time
   isLeave?: boolean;
   leaveType?: 'CP' | 'MAL' | 'CSS' | 'AT';
   leaveDays?: number;
@@ -40,6 +41,26 @@ export interface Shift {
 }
 
 export type AppTab = 'home' | 'planning' | 'paie' | 'profile';
+
+export type UserRole = 'dea' | 'auxiliary' | 'taxi';
+
+export interface UserProfile {
+  firstName: string;
+  lastName: string;
+  companyName: string;
+  onboarded: boolean;
+  roles: UserRole[];
+  primaryRole: UserRole;
+  contractType: string;
+  hoursBase: string;
+  contractStartDate: string;
+  autoGeo: boolean;
+  pushEnabled: boolean;
+  weeklyContractHours: number;
+  overtimeMode: 'weekly' | 'biweekly' | 'modulation' | 'annualized';
+  modulationWeeks?: number;
+  payRateMode: '100_percent' | '90_percent';
+}
 
 export interface Badge {
   id: string;

@@ -8,7 +8,7 @@ service cloud.firestore {
       return request.auth != null;
     }
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return (isAuthenticated() && request.auth.uid == userId) || userId == 'local_user';
     }
     
     function isAdmin() {
@@ -35,11 +35,17 @@ service cloud.firestore {
         'auxDate', 'taxiDate', 'taxiCardExpiryDate', 'taxiFpcDate',
         'afgsuDate', 'medicalExpiryDate', 'cpCalculationMode',
         'modulationStartDate', 'modulationWeeks', 'initialCpBalance',
+        'weeklyContractHours', 'overtimeMode', 'payRateMode',
         'pushEnabled', 'followSystemTheme', 'customHours',
-        'email', 'createdAt'
+        'email', 'createdAt', 'roles', 'primaryRole'
       ]) &&
       (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
-      (!('onboarded' in data) || (data.onboarded is bool));
+      (!('onboarded' in data) || (data.onboarded is bool)) &&
+      (!('roles' in data) || (data.roles is list)) &&
+      (!('primaryRole' in data) || (data.primaryRole is string)) &&
+      (!('weeklyContractHours' in data) || (data.weeklyContractHours is number)) &&
+      (!('overtimeMode' in data) || (data.overtimeMode is string)) &&
+      (!('payRateMode' in data) || (data.payRateMode is string));
     }
 
     // ===============================================================
@@ -47,13 +53,17 @@ service cloud.firestore {
     // ===============================================================
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create, update: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /test/{docId} {
+      allow read: if true;
     }
 
     match /shifts/{shiftId} {
-      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isOwner(request.resource.data.userId);
+      allow update, delete: if isOwner(resource.data.userId);
     }
   }
 }

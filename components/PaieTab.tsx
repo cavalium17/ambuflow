@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wallet, 
   TrendingUp, 
@@ -289,7 +289,9 @@ interface PaieTabProps {
   darkMode?: boolean;
   hasTaxiCard?: boolean;
   hourlyRate: string;
-  hoursBase: string;
+  weeklyContractHours: number;
+  overtimeMode: 'weekly' | 'biweekly' | 'modulation' | 'annualized';
+  payRateMode: '100_percent' | '90_percent';
   workRegime: string;
   shifts: Shift[];
   cpCalculationMode?: '25' | '30';
@@ -299,7 +301,9 @@ const PaieTab: React.FC<PaieTabProps> = ({
   darkMode = false, 
   hasTaxiCard = false, 
   hourlyRate, 
-  hoursBase, 
+  weeklyContractHours,
+  overtimeMode,
+  payRateMode,
   workRegime, 
   shifts,
   cpCalculationMode = '25'
@@ -322,7 +326,7 @@ const PaieTab: React.FC<PaieTabProps> = ({
 
   const calculateShiftStats = (shift: Shift) => {
     if (shift.isLeave) {
-      const baseHours = parseFloat(hoursBase) || 35;
+      const baseHours = weeklyContractHours || 35;
       const hoursPerDay = baseHours / (cpCalculationMode === '25' ? 5 : 6);
       const effectiveMin = Math.round(hoursPerDay * 60);
       const grossEarnings = (effectiveMin / 60) * parsedHourlyRate;
@@ -360,7 +364,9 @@ const PaieTab: React.FC<PaieTabProps> = ({
     }
 
     const effectiveMin = Math.max(0, amplitudeMin - totalBreaksMin);
-    const effectiveHours = effectiveMin / 60;
+    const remunerationCoefficient = payRateMode === '90_percent' ? 0.9 : 1.0;
+    const paidMin = effectiveMin * remunerationCoefficient;
+    const effectiveHours = paidMin / 60;
     
     const baseGrossEarnings = effectiveHours * parsedHourlyRate;
 
@@ -529,7 +535,7 @@ const PaieTab: React.FC<PaieTabProps> = ({
       isPositiveTrendBrut,
       months: sortedMonths
     };
-  }, [shifts, hasTaxiCard, parsedHourlyRate, hoursBase, cpCalculationMode]);
+  }, [shifts, hasTaxiCard, parsedHourlyRate, weeklyContractHours, overtimeMode, payRateMode, cpCalculationMode]);
 
   const cardClass = `p-6 rounded-[32px] border transition-all duration-300 ${
     darkMode ? 'bg-slate-900 border-white/5 shadow-2xl shadow-black/40' : 'bg-white border-slate-100 shadow-xl shadow-slate-200/40'
