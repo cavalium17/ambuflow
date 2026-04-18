@@ -374,9 +374,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                     disabled={loading}
                     className="group relative flex items-center justify-center gap-2 px-6 py-4 bg-[#0F172A] text-white font-black uppercase tracking-[0.15em] rounded-full shadow-[0_12px_24px_-8px_rgba(15,23,42,0.4)] hover:shadow-[0_16px_32px_-8px_rgba(15,23,42,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all text-[10px] disabled:opacity-50 overflow-hidden"
                   >
-                    <span className="text-center">
-                      {loading ? <Loader2 className="animate-spin" size={16} /> : (isLogin ? 'SE CONNECTER' : "S'INSCRIRE")}
-                    </span>
+                    <span className="text-center whitespace-nowrap">
+  {loading ? (
+    <Loader2 className="animate-spin" size={16} />
+  ) : (
+    isLogin ? 'SE CONNECTER' : "S'INSCRIRE"
+  )}
+</span>
                     <ChevronRight size={14} className="text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                   </button>
 

@@ -59,7 +59,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       console.error("Auth error:", err);
       let message = "Une erreur est survenue.";
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        message = "Email ou mot de passe incorrect.";
+        message = "email inexistant. Inscrivez vous !";
       } else if (err.code === 'auth/email-already-in-use') {
         message = "Cet email est déjà utilisé.";
       } else if (err.code === 'auth/weak-password') {
