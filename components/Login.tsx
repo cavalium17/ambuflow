@@ -372,18 +372,20 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                   <button 
   type="submit" 
   disabled={loading}
-  className="group relative flex items-center justify-center gap-1.5 px-4 py-4 bg-[#0F172A] text-white font-black uppercase tracking-[0.1em] rounded-full shadow-[0_12px_24px_-8px_rgba(15,23,42,0.4)] hover:shadow-[0_16px_32px_-8px_rgba(15,23,42,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all text-[10px] disabled:opacity-50 overflow-hidden w-full"
+  className="group relative flex items-center justify-center px-4 py-4 bg-[#0F172A] text-white font-black uppercase tracking-tight rounded-full shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 w-full min-w-max"
 >
-  <span className="text-center whitespace-nowrap">
-    {loading ? (
-      <Loader2 className="animate-spin" size={16} />
-    ) : (
-      isLogin ? 'SE CONNECTER' : "S'INSCRIRE"
+  <div className="flex items-center justify-center gap-1 w-full">
+    <span className="text-[9px] sm:text-[10px] whitespace-nowrap leading-none">
+      {loading ? (
+        <Loader2 className="animate-spin" size={14} />
+      ) : (
+        isLogin ? 'SE CONNECTER' : "S'INSCRIRE"
+      )}
+    </span>
+    {!loading && (
+      <ChevronRight size={14} className="flex-shrink-0 text-white/40 group-hover:text-white transition-all" />
     )}
-  </span>
-  {!loading && (
-    <ChevronRight size={14} className="flex-shrink-0 text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-  )}
+  </div>
 </button>
 
                   {/* Secondary Capsule Button */}
