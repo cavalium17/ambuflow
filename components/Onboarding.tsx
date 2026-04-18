@@ -33,6 +33,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [weeklyContractHours, setWeeklyContractHours] = useState(35);
   const [overtimeMode, setOvertimeMode] = useState<'weekly' | 'biweekly' | 'modulation' | 'annualized'>('weekly');
   const [modulationWeeks, setModulationWeeks] = useState(4);
+  const [modulationStartDate, setModulationStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [payRateMode, setPayRateMode] = useState<'100_percent' | '90_percent'>('100_percent');
   const [contractStartDate, setContractStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [autoGeo, setAutoGeo] = useState(true);
@@ -69,6 +70,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       weeklyContractHours,
       overtimeMode,
       modulationWeeks,
+      modulationStartDate,
       payRateMode,
       contractStartDate,
       autoGeo,
@@ -94,7 +96,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         ))}
       </div>
 
-      <div className="flex-1 flex flex-col p-6 relative">
+      <div className="flex-1 min-h-0 flex flex-col p-6 relative">
         <AnimatePresence mode="wait">
           {step === 0 && (
             <motion.div 
@@ -132,13 +134,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="flex-1 flex flex-col"
+              className="flex-1 min-h-0 flex flex-col"
             >
-              <div className="mt-8 mb-12">
+              <div className="mt-8 mb-12 flex-shrink-0">
                 <h2 className="text-3xl font-black text-white tracking-tight mb-2">Enchanté !</h2>
                 <p className="text-slate-400">Commençons par faire connaissance.</p>
               </div>
-              <div className="space-y-6">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-10 space-y-8 custom-scrollbar">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Prénom</label>
                   <input 
@@ -189,17 +191,17 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="flex-1 flex flex-col"
+              className="flex-1 min-h-0 flex flex-col"
             >
-              <div className="mt-8 mb-8">
+              <div className="mt-8 mb-8 flex-shrink-0">
                 <h2 className="text-3xl font-black text-white tracking-tight mb-2">Votre métier ?</h2>
                 <p className="text-slate-400">Sélectionnez un ou plusieurs rôles.</p>
               </div>
-              <div className="space-y-4">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-10 space-y-4 custom-scrollbar">
                 {[
-                  { id: 'dea', label: 'Ambulancier DEA', icon: Stethoscope, color: 'indigo' },
+                  { id: 'dea', label: 'Ambulancier DE', icon: Stethoscope, color: 'indigo' },
                   { id: 'auxiliary', label: 'Auxiliaire Ambulancier', icon: Users, color: 'emerald' },
-                  { id: 'taxi', label: 'Chauffeur de Taxi', icon: Car, color: 'amber' }
+                  { id: 'taxi', label: 'Conducteur Taxi', icon: Car, color: 'amber' }
                 ].map((role) => {
                   const isActive = roles.includes(role.id as UserRole);
                   const colorClasses = {
@@ -256,18 +258,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="flex-1 flex flex-col"
+              className="flex-1 min-h-0 flex flex-col"
             >
-              <div className="mt-8 mb-8">
+              <div className="mt-8 mb-8 flex-shrink-0">
                 <h2 className="text-3xl font-black text-white tracking-tight mb-2">Activité principale</h2>
                 <p className="text-slate-400">Celle que vous pratiquez le plus souvent.</p>
               </div>
-              <div className="space-y-4">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-10 space-y-4 custom-scrollbar">
                 {roles.map((roleId) => {
                   const roleInfo = {
-                    dea: { label: 'Ambulancier DEA', icon: Stethoscope },
+                    dea: { label: 'Ambulancier DE', icon: Stethoscope },
                     auxiliary: { label: 'Auxiliaire Ambulancier', icon: Users },
-                    taxi: { label: 'Chauffeur de Taxi', icon: Car }
+                    taxi: { label: 'Conducteur Taxi', icon: Car }
                   }[roleId];
                   return (
                     <button
@@ -310,14 +312,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="flex-1 flex flex-col"
+              className="flex-1 min-h-0 flex flex-col"
             >
-              <div className="mt-8 mb-6">
+              <div className="mt-8 mb-6 flex-shrink-0">
                 <h2 className="text-3xl font-black text-white tracking-tight mb-2">Votre contrat</h2>
                 <p className="text-slate-400">Configuration précise de votre temps de travail.</p>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-6 custom-scrollbar">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-10 space-y-6 custom-scrollbar">
                 {/* Base Hebdomadaire */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-end ml-1">
@@ -387,26 +389,41 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                   <motion.div 
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-3"
+                    className="space-y-6"
                   >
-                    <div className="flex justify-between items-center ml-1">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Durée de la modulation</label>
-                      <span className="text-indigo-400 font-black text-sm">{modulationWeeks} semaines</span>
-                    </div>
-                    <div className="px-2 py-4 bg-slate-900 border border-slate-800 rounded-2xl">
-                      <input 
-                        type="range"
-                        min="4"
-                        max="12"
-                        step="1"
-                        value={modulationWeeks}
-                        onChange={(e) => setModulationWeeks(Number(e.target.value))}
-                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                      />
-                      <div className="flex justify-between mt-2 px-1">
-                        <span className="text-[10px] font-bold text-slate-600">4 sem.</span>
-                        <span className="text-[10px] font-bold text-slate-600">12 sem.</span>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center ml-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Durée de la modulation</label>
+                        <span className="text-indigo-400 font-black text-sm">{modulationWeeks} semaines</span>
                       </div>
+                      <div className="px-2 py-4 bg-slate-900 border border-slate-800 rounded-2xl">
+                        <input 
+                          type="range"
+                          min="4"
+                          max="12"
+                          step="1"
+                          value={modulationWeeks}
+                          onChange={(e) => setModulationWeeks(parseInt(e.target.value))}
+                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        />
+                        <div className="flex justify-between mt-2 px-1">
+                          <span className="text-[10px] font-bold text-slate-600">4 sem.</span>
+                          <span className="text-[10px] font-bold text-slate-600">12 sem.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Date de début du cycle</label>
+                      <input 
+                        type="date" 
+                        value={modulationStartDate}
+                        onChange={(e) => setModulationStartDate(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl focus:border-indigo-500 outline-none transition-all"
+                      />
+                      <p className="text-[10px] text-slate-400 italic ml-1 leading-relaxed">
+                        “C'est la date à laquelle votre premier cycle de {modulationWeeks} semaines a débuté.”
+                      </p>
                     </div>
                   </motion.div>
                 )}
@@ -466,7 +483,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="flex-1 flex flex-col"
+              className="flex-1 min-h-0 flex flex-col"
             >
               <div className="mt-8 mb-8">
                 <h2 className="text-3xl font-black text-white tracking-tight mb-2">Super-pouvoirs</h2>
@@ -527,7 +544,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="flex-1 flex flex-col justify-center items-center text-center space-y-12"
+              className="flex-1 min-h-0 flex flex-col justify-center items-center text-center space-y-12"
             >
               <div className="relative">
                 <motion.div 

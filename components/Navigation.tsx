@@ -7,13 +7,14 @@ interface NavigationProps {
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
   darkMode?: boolean;
+  isGuest?: boolean;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMode = false }) => {
+const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMode = false, isGuest = false }) => {
   const tabs = [
     { id: 'home', icon: Clock, label: 'Board' },
     { id: 'planning', icon: Calendar, label: 'Agenda' },
-    { id: 'paie', icon: Wallet, label: 'Revenus' },
+    { id: 'paie', icon: Wallet, label: 'Revenus', disabled: isGuest },
     { id: 'profile', icon: User, label: 'Profil' },
   ];
 
@@ -26,14 +27,17 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMo
       }`}>
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
+          const isDisabled = tab.disabled;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as AppTab)}
+              onClick={() => !isDisabled && setActiveTab(tab.id as AppTab)}
               className={`flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-300 outline-none ${
-                isActive 
-                ? 'text-white' 
-                : 'text-slate-500 hover:text-slate-300'
+                isDisabled
+                ? 'opacity-20 cursor-not-allowed text-slate-500'
+                : (isActive 
+                  ? 'text-white' 
+                  : 'text-slate-500 hover:text-slate-300')
               }`}
             >
               <tab.icon 

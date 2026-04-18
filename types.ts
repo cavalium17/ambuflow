@@ -59,6 +59,7 @@ export interface UserProfile {
   weeklyContractHours: number;
   overtimeMode: 'weekly' | 'biweekly' | 'modulation' | 'annualized';
   modulationWeeks?: number;
+  modulationStartDate?: string;
   payRateMode: '100_percent' | '90_percent';
 }
 
@@ -72,6 +73,8 @@ export interface Badge {
 
 export interface UserStats {
   lastActiveDay?: string;
+  level: number;
+  xp: number;
 }
 
 export interface PushNotification {

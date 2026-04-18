@@ -49,10 +49,3 @@ root.render(
     <App />
   </React.StrictMode>
 );
-
-// Retrait de l'écran de chargement initial une fois l'application prête
-const loader = document.getElementById('initial-loader');
-if (loader) {
-  loader.style.opacity = '0';
-  setTimeout(() => loader.remove(), 600);
-}

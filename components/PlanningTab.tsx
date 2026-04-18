@@ -86,6 +86,20 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   };
 
   const todayStr = useMemo(() => getLocalDateString(appCurrentTime), [appCurrentTime]);
+
+  const modulationEndDateStr = useMemo(() => {
+    if (!modulationStartDate || !modulationWeeks) return null;
+    try {
+      const start = new Date(modulationStartDate);
+      const weeks = parseInt(modulationWeeks) || 4;
+      const end = new Date(start);
+      end.setDate(start.getDate() + (weeks * 7) - 1);
+      return getLocalDateString(end);
+    } catch (e) {
+      return null;
+    }
+  }, [modulationStartDate, modulationWeeks, getLocalDateString]);
+
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -278,7 +292,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     const anchor = modulationStartDate ? new Date(modulationStartDate) : (contractStartDate ? new Date(contractStartDate) : new Date(2024, 0, 1));
     anchor.setHours(0, 0, 0, 0);
     
-    const diffMs = appCurrentTime.getTime() - anchor.getTime();
+    const diffMs = pivotDate.getTime() - anchor.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const currentCycleIndex = Math.floor(diffDays / cycleDays);
     
@@ -568,9 +582,16 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
             <button onClick={() => navigate(-1)} className="p-3 bg-slate-500/5 rounded-2xl hover:bg-slate-500/10 transition-colors"><ChevronLeft size={20} /></button>
             <div className="flex flex-col">
               <h2 className="text-xl font-black tracking-tight capitalize leading-none">{viewType === 'week' ? 'Mon Agenda' : pivotDate.toLocaleDateString('fr-FR', {month:'long', year:'numeric'})}</h2>
-              {getLocalDateString(pivotDate) !== todayStr && (
-                <button onClick={goToToday} className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-1 text-left">Aujourd'hui</button>
-              )}
+              <div className="flex items-center gap-2">
+                {getLocalDateString(pivotDate) !== todayStr && (
+                  <button onClick={goToToday} className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-1">Aujourd'hui</button>
+                )}
+                {workRegime === 'modulation' && modulationPeriod && (
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                    Cycle : {modulationPeriod.start} - {modulationPeriod.end}
+                  </p>
+                )}
+              </div>
             </div>
             <button onClick={() => navigate(1)} className="p-3 bg-slate-500/5 rounded-2xl hover:bg-slate-500/10 transition-colors"><ChevronRight size={20} /></button>
           </div>
@@ -593,6 +614,12 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                     <div className="flex items-center gap-2">
                       <h4 className="text-xl font-black tracking-tight capitalize">{day.getDate()} {day.toLocaleDateString('fr-FR', { month: 'long' })}</h4>
                       {isToday && <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full" />}
+                      {dStr === modulationEndDateStr && (
+                        <div className="flex items-center gap-1 bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                          <AlertTriangle size={10} />
+                          <span className="text-[8px] font-black uppercase tracking-widest">Fin Modulation</span>
+                        </div>
+                      )}
                     </div>
                    </div>
                    {isToday && <div className="bg-indigo-600 px-4 py-1.5 rounded-full shadow-lg border border-white/10"><span className="text-[9px] font-black text-white uppercase tracking-widest">AUJOURD'HUI</span></div>}
@@ -615,6 +642,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                 const dStr = getLocalDateString(day);
                 const isToday = dStr === todayStr;
                 const isSelected = dStr === selectedDay;
+                const isModulationEnd = dStr === modulationEndDateStr;
                 const dayShifts = getDayShifts(dStr);
                 const hasShifts = dayShifts.length > 0;
                 const hasCP = dayShifts.some(s => s.isLeave && (s.leaveType === 'CP' || s.leaveType === 'Congés Payés' || s.leaveType === 'Congé' || s.vehicle === 'CONGÉ'));
@@ -631,12 +659,21 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                           ? 'bg-orange-500 text-white shadow-md'
                           : isToday 
                             ? 'text-indigo-600 ring-2 ring-indigo-500/20' 
-                            : hasWork 
-                              ? (darkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') 
-                              : 'text-slate-400 hover:bg-slate-500/5'
+                            : isModulationEnd
+                              ? 'bg-amber-500/10 text-amber-500 ring-2 ring-amber-500/30'
+                              : hasWork 
+                                ? (darkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') 
+                                : 'text-slate-400 hover:bg-slate-500/5'
                     }`}
                   >
                     {day.getDate()}
+                    {isModulationEnd && (
+                      <div className="absolute -top-1 -right-1">
+                        <div className="w-3 h-3 bg-amber-500 rounded-full flex items-center justify-center border-2 border-white dark:border-[#0F1221]">
+                          <AlertTriangle size={6} className="text-white" />
+                        </div>
+                      </div>
+                    )}
                     <div className="absolute bottom-1.5 flex gap-0.5">
                       {hasWork && !isSelected && !hasCP && (
                         <div className="w-1 h-1 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]" />

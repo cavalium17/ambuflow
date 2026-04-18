@@ -31,18 +31,6 @@
 <link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-[#030712]">
-    <div id="initial-loader" style="position: fixed; inset: 0; background: #030712; display: flex; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);">
-        <div style="position: relative; display: flex; align-items: center; justify-content: center;">
-            <div style="position: absolute; width: 200px; height: 200px; background: #3b82f6; filter: blur(60px); opacity: 0.4; border-radius: 50%; animation: pulse 2s infinite alternate;"></div>
-            <img src="/pwa-512x512.png" style="width: 120px; height: 120px; position: relative; z-index: 1; filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5));" alt="AmbuFlow">
-        </div>
-    </div>
-    <style>
-        @keyframes pulse {
-            from { transform: scale(0.95); opacity: 0.3; }
-            to { transform: scale(1.1); opacity: 0.5; }
-        }
-    </style>
     <div id="root"></div>
 <script type="module" src="/index.tsx"></script>
 </body>

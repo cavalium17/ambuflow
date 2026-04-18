@@ -1,52 +1,44 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Mail, 
   Lock, 
   ChevronRight, 
   Loader2,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  Chrome,
+  UserCircle,
+  Fingerprint,
+  Apple,
+  Eye,
+  EyeOff,
+  Plus
 } from 'lucide-react';
-import { auth } from '../src/firebaseConfig';
+import { auth, googleProvider } from '../src/firebaseConfig';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  signInWithPopup
 } from 'firebase/auth';
 
 interface LoginProps {
   onLoginSuccess?: () => void;
+  onEnterAsGuest?: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
+const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
+  const [showUserNotFoundModal, setShowUserNotFoundModal] = useState(false);
   
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    const playVideo = async () => {
-      if (videoRef.current && isMounted) {
-        try {
-          await videoRef.current.play();
-        } catch (error) {
-          // Only log if still mounted to avoid "media removed from document" noise
-          if (isMounted) {
-            console.error("Video autoplay failed:", error);
-          }
-        }
-      }
-    };
-    playVideo();
-    return () => { isMounted = false; };
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -62,16 +54,42 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     } catch (err: any) {
       console.error("Auth error:", err);
       let message = "Une erreur est survenue.";
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      
+      if (err.code === 'auth/user-not-found') {
+        setShowUserNotFoundModal(true);
+        setLoading(false);
+        return;
+      }
+
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         message = "Email ou mot de passe incorrect.";
       } else if (err.code === 'auth/email-already-in-use') {
-        message = "Cet email est déjà utilisé.";
+        message = "Cet email est déjà enregistré. Veuillez vous connecter.";
+        setIsLogin(true);
       } else if (err.code === 'auth/weak-password') {
-        message = "Le mot de passe est trop faible.";
+        message = "Le mot de passe doit contenir au moins 6 caractères.";
       } else if (err.code === 'auth/invalid-email') {
         message = "Format d'email invalide.";
+      } else if (err.code === 'auth/network-request-failed') {
+        message = "Erreur réseau. Vérifiez votre connexion.";
+      } else if (err.code === 'auth/too-many-requests') {
+        message = "Trop de tentatives. Veuillez réessayer plus tard.";
       }
       setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      if (onLoginSuccess) onLoginSuccess();
+    } catch (err: any) {
+      console.error("Google Auth error:", err);
+      setError("Erreur lors de la connexion avec Google.");
     } finally {
       setLoading(false);
     }
@@ -83,10 +101,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       return;
     }
     setLoading(true);
+    setError(null);
+    setResetSent(false);
     try {
       await sendPasswordResetEmail(auth, email);
       setResetSent(true);
-      setError(null);
     } catch (err: any) {
       setError("Erreur lors de l'envoi de l'email de réinitialisation.");
     } finally {
@@ -95,131 +114,262 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
-      {/* Background Video (Ambulance Luma - Forced Local with Safety Fallback) */}
-      <video 
-        ref={videoRef}
-        autoPlay 
-        loop 
-        muted 
-        playsInline 
-        {...{ "webkit-playsinline": "true" }}
-        className="fixed inset-0 w-full h-full object-cover z-0" 
-      >
-        <source src="/login-bg.mp4" type="video/mp4" />
-        {/* Safety Fallback: High-quality dark ambulance video if local file is missing */}
-        <source src="https://assets.mixkit.co/videos/preview/mixkit-ambulance-driving-at-night-with-flashing-lights-34182-large.mp4" type="video/mp4" />
-      </video>
+    <div className="fixed inset-0 z-[100] bg-[#F8FAFC] overflow-y-auto font-sans selection:bg-indigo-100">
+      {/* Background Decorative Elements */}
+      <div className="fixed inset-0 z-0 opacity-40 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200/20 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-slate-200/30 blur-[120px] rounded-full" />
+      </div>
 
-      {/* Dark Overlay (Cockpit Ambiance) */}
-      <div className="fixed inset-0 bg-slate-950/80 z-[1]" />
-
-      {/* Main Container */}
-      <div className="relative z-10 flex items-center justify-center min-h-screen p-6">
-        <div className="w-full max-w-md animate-slideIn">
-          {/* Form Card (Cockpit Glassmorphism) */}
-          <div className="bg-black/40 backdrop-blur-3xl border border-white/10 rounded-[40px] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] space-y-8">
-            <div className="text-center">
-              <h1 className="text-white font-black tracking-[0.4em] text-3xl mb-10 uppercase animate-textSlideUp">
-                AmbuFlow
-              </h1>
+      {/* User Not Found Modal */}
+      {showUserNotFoundModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-[#0F172A]/40 backdrop-blur-sm animate-fadeIn" onClick={() => setShowUserNotFoundModal(false)} />
+          <div className="relative w-full max-w-sm bg-white rounded-[32px] p-8 shadow-2xl border border-indigo-50 animate-popIn text-center space-y-6">
+            <div className="w-16 h-16 bg-amber-50 rounded-3xl flex items-center justify-center mx-auto text-amber-500">
+              <Mail size={32} />
             </div>
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-4">
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50" size={20} />
-                  <input 
-                    type="email" 
-                    placeholder="ADRESSE EMAIL" 
-                    required
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white placeholder:text-white/40 focus:bg-white/10 focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all text-xs font-bold tracking-widest" 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
-                  />
-                </div>
-
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50" size={20} />
-                  <input 
-                    type="password" 
-                    placeholder="MOT DE PASSE" 
-                    required
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pl-12 text-white placeholder:text-white/40 focus:bg-white/10 focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all text-xs font-bold tracking-widest" 
-                    value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
-                  />
-                </div>
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-3 p-4 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-200 animate-shake">
-                  <AlertCircle size={16} />
-                  <p className="text-[10px] font-bold uppercase tracking-wider">{error}</p>
-                </div>
-              )}
-
-              {resetSent && (
-                <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-200">
-                  <ShieldCheck size={16} />
-                  <p className="text-[10px] font-bold uppercase tracking-wider">Lien envoyé avec succès</p>
-                </div>
-              )}
-
+            <div className="space-y-4">
+              <h3 className="text-xl font-black text-[#0F172A] tracking-tight">Compte introuvable</h3>
+              <p className="text-[10px] text-slate-500 font-bold leading-relaxed uppercase tracking-widest px-4">
+                L'adresse <span className="text-indigo-600 font-black">{email}</span> n'est pas encore enregistrée chez AmbuFlow.
+              </p>
+            </div>
+            
+            <div className="space-y-3">
               <button 
-                type="submit" 
-                disabled={loading}
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-black uppercase tracking-[0.2em] rounded-2xl shadow-lg shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50 group"
+                onClick={() => {
+                  setIsLogin(false);
+                  setShowUserNotFoundModal(false);
+                }}
+                className="w-full py-4 bg-[#0F172A] text-white font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] shadow-lg active:scale-95 transition-all"
               >
-                {loading ? (
-                  <Loader2 className="animate-spin" size={20} />
-                ) : (
-                  <>
-                    <span>{isLogin ? 'Se Connecter' : 'S\'inscrire'}</span>
-                    <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
+                Créer mon compte
               </button>
-            </form>
-
-            <div className="flex flex-col items-center gap-4 pt-4">
               <button 
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-white/50 font-bold hover:text-white transition-colors uppercase tracking-widest text-[10px]"
+                onClick={() => {
+                  setShowUserNotFoundModal(false);
+                  if (onEnterAsGuest) onEnterAsGuest();
+                }}
+                className="w-full py-4 bg-white border border-slate-100 text-[#0F172A] font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
               >
-                {isLogin ? "Créer un compte" : "Se connecter"}
+                <UserCircle size={18} className="opacity-40" />
+                Accès Invité
               </button>
-              
-              {isLogin && (
-                <button 
-                  onClick={handleResetPassword}
-                  className="text-white/30 font-bold hover:text-white/50 transition-colors uppercase tracking-widest text-[10px]"
-                >
-                  Mot de passe oublié ?
-                </button>
-              )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Main Container */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-6 md:p-12">
+        <div className="w-full max-w-md space-y-10">
+          {/* Header */}
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="text-center space-y-2"
+          >
+            <h1 className="text-[#0F172A] font-black tracking-[0.4em] text-4xl md:text-5xl uppercase leading-none">
+              AmbuFlow
+            </h1>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] font-sans">
+              Gestion de vos heures avec précision
+            </p>
+          </motion.div>
+
+          {/* Passkey Preferred Method */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="space-y-4"
+          >
+            <button 
+              className="w-full group relative flex items-center justify-between p-5 bg-white border border-slate-100 rounded-[24px] shadow-sm hover:shadow-md hover:border-indigo-100 transition-all active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
+                  <Fingerprint size={28} />
+                </div>
+                <div className="text-left">
+                  <p className="text-[#0F172A] font-black text-xs uppercase tracking-wider">Accès Rapide</p>
+                  <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest">Utiliser votre Passkey</p>
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:text-indigo-500 transition-colors">
+                <ChevronRight size={18} />
+              </div>
+            </button>
+          </motion.div>
+
+          {/* Form Card */}
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 1 }}
+            className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.08)] relative overflow-hidden"
+          >
+            <div className="space-y-6">
+              {/* Classic Login Fields */}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
+                    <div className="relative group">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" size={16} />
+                      <input 
+                        type="email" 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="nom@entreprise.fr"
+                        required
+                        className="w-full bg-white/50 border border-slate-100 rounded-2xl p-4 pl-12 text-[#0F172A] text-xs font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all placeholder:text-slate-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center ml-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Mot de passe</label>
+                      {isLogin && (
+                        <button 
+                          type="button" 
+                          onClick={handleResetPassword}
+                          className="text-[9px] font-black text-indigo-500/60 hover:text-indigo-500 uppercase tracking-widest"
+                        >
+                          Oublié ?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative group">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" size={16} />
+                      <input 
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        className="w-full bg-white/50 border border-slate-100 rounded-2xl p-4 pl-12 pr-12 text-[#0F172A] text-xs font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all placeholder:text-slate-200"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center gap-3 p-3.5 rounded-2xl bg-rose-50 border border-rose-100 text-rose-500"
+                  >
+                    <AlertCircle size={18} className="shrink-0" />
+                    <p className="text-[9px] font-black uppercase tracking-wider">{error}</p>
+                  </motion.div>
+                )}
+
+                {resetSent && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-3 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-500"
+                  >
+                    <ShieldCheck size={18} className="shrink-0" />
+                    <p className="text-[9px] font-black uppercase tracking-wider">Vérifiez vos emails</p>
+                  </motion.div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Primary Button */}
+                  <button 
+                    type="submit" 
+                    disabled={loading}
+                    className="group relative flex items-center justify-center gap-2 px-6 py-4 bg-[#0F172A] text-white font-black uppercase tracking-[0.1em] rounded-full shadow-[0_12px_24px_-8px_rgba(15,23,42,0.4)] hover:shadow-[0_16px_32px_-8px_rgba(15,23,42,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all text-[9.5px] disabled:opacity-50 overflow-hidden"
+                  >
+                    <span className="text-center">
+                      {loading ? <Loader2 className="animate-spin" size={16} /> : (isLogin ? 'SE CONNECTER' : "S'INSCRIRE")}
+                    </span>
+                    <ChevronRight size={14} className="text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                  </button>
+
+                  {/* Secondary Button */}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setIsLogin(!isLogin);
+                      setError(null);
+                    }}
+                    className="group flex items-center gap-3 px-6 py-4 bg-white border border-indigo-100/50 text-[#0F172A] font-black uppercase tracking-[0.1em] rounded-full shadow-[0_10px_20px_-10px_rgba(79,70,229,0.1)] hover:shadow-[0_12px_24px_-10px_rgba(79,70,229,0.15)] hover:border-indigo-200 active:scale-[0.98] transition-all text-[9.5px]"
+                  >
+                    <div className="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                      <Plus size={14} />
+                    </div>
+                    <span className="flex-1 text-center [text-shadow:0_0_1px_rgba(79,70,229,0.1)]">
+                      {isLogin ? "S'INSCRIRE" : "CONNEXION"}
+                    </span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Social Auth */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-4">
+                  <div className="h-px flex-1 bg-slate-100" />
+                  <span className="text-[8px] font-black text-slate-300 tracking-[0.3em] uppercase">Autre méthode</span>
+                  <div className="h-px flex-1 bg-slate-100" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={handleGoogleLogin}
+                    className="flex items-center justify-center gap-2 py-4 border border-slate-100 rounded-2xl bg-white hover:bg-slate-50 transition-all font-bold text-[10px] uppercase tracking-wider text-slate-600"
+                  >
+                    <Chrome size={16} className="text-indigo-500" />
+                    Google
+                  </button>
+                  <button 
+                    className="flex items-center justify-center gap-2 py-4 border border-slate-100 rounded-2xl bg-white hover:bg-slate-50 transition-all font-bold text-[10px] uppercase tracking-wider text-slate-600"
+                  >
+                    <Apple size={16} className="text-slate-900" />
+                    Apple
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Footer */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            className="text-center"
+          >
+            <button 
+              onClick={onEnterAsGuest}
+              className="text-slate-400 font-black uppercase tracking-[0.3em] text-[9px] hover:text-[#0F172A] transition-colors"
+            >
+              Accès Invité
+            </button>
+          </motion.div>
         </div>
       </div>
 
       <style>{`
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes popIn { 
+          0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); } 
         }
-        @keyframes textSlideUp {
-          from { opacity: 0; transform: translateY(20px); filter: blur(10px); }
-          to { opacity: 1; transform: translateY(0); filter: blur(0); }
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-4px); }
-          75% { transform: translateX(4px); }
-        }
-        .animate-slideIn { animation: slideIn 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-        .animate-textSlideUp { animation: textSlideUp 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s forwards; opacity: 0; }
-        .animate-shake { animation: shake 0.2s ease-in-out 0s 2; }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-popIn { animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
     </div>
   );

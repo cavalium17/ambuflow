@@ -62,8 +62,8 @@ const DailyRecap: React.FC<DailyRecapProps> = ({ shift, userStats, hourlyRate, o
   const calculateStats = () => {
     if (!shift.start || shift.end === '--:--') return null;
 
-    const [h1, m1] = shift.start.split(':').map(Number);
-    const [h2, m2] = shift.end.split(':').map(Number);
+    const [h1, m1] = (shift.start || "00:00").split(':').map(v => parseInt(v) || 0);
+    const [h2, m2] = (shift.end || "00:00").split(':').map(v => parseInt(v) || 0);
     
     const startMin = h1 * 60 + m1;
     const endMin = h2 * 60 + m2;

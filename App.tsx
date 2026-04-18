@@ -29,6 +29,7 @@ import {
   Activity,
   Clock,
   Zap,
+  Lock,
   TrendingUp,
   AlertTriangle,
   Calendar,
@@ -50,8 +51,6 @@ import {
   Loader2
 } from 'lucide-react';
 import { ServiceStatus, ActivityLog, AppTab, Shift, Break, UserStats, UserRole, UserProfile, PushNotification as PushType } from './types';
-import BoardTab from './components/BoardTab';
-import AssistantTab from './components/AssistantTab';
 import PlanningTab from './components/PlanningTab';
 import PaieTab from './components/PaieTab';
 import ProfileTab from './components/ProfileTab';
@@ -59,9 +58,10 @@ import Navigation from './components/Navigation';
 import PushNotification from './components/PushNotification';
 import DailyRecap from './components/DailyRecap';
 import Onboarding from './components/Onboarding';
+import Login from './components/Login';
 import { auth, db } from './src/firebaseConfig';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged, User as FirebaseUser, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
 import { requestNotificationPermissions, requestLocationPermissions, setupNotificationChannels } from './services/notificationManager';
 import { requestForToken, onMessageListener } from './src/firebaseConfig';
 
@@ -226,9 +226,10 @@ const isSundayOrHoliday = (dateStr: string) => {
 const App: React.FC = () => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [configLoading, setConfigLoading] = useState(false);
+  const [configLoading, setConfigLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isGuest, setIsGuest] = useState(() => localStorage.getItem('ambuflow_is_guest') === 'true');
 
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [gainsCarouselIndex, setGainsCarouselIndex] = useState(0);
@@ -246,7 +247,12 @@ const App: React.FC = () => {
 
   const [userStats, setUserStats] = useState<UserStats>(() => {
     const saved = localStorage.getItem('ambuflow_user_stats');
-    return saved ? JSON.parse(saved) : { lastActiveDay: undefined };
+    const stats = saved ? JSON.parse(saved) : {};
+    return {
+      lastActiveDay: stats.lastActiveDay,
+      level: Number(stats.level) || 1,
+      xp: Number(stats.xp) || 0
+    };
   });
 
   const [notifications, setNotifications] = useState<PushType[]>([]);
@@ -260,9 +266,10 @@ const App: React.FC = () => {
     return localStorage.getItem('ambuflow_active_shift_id');
   });
 
-  // Consolidated Config State
+  // Consolidate Config State
   const [userName, setUserName] = useState("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
+
   const [jobTitle, setJobTitle] = useState("Ambulancier DE");
   const [hourlyRate, setHourlyRate] = useState("12.79");
   const [companyName, setCompanyName] = useState("");
@@ -295,7 +302,19 @@ const App: React.FC = () => {
   const [initialCpBalance, setInitialCpBalance] = useState(0);
   const [customHours, setCustomHours] = useState("");
   const [followSystemTheme, setFollowSystemTheme] = useState(true);
-  const [onboarded, setOnboarded] = useState(false);
+  const [onboarded, setOnboarded] = useState<boolean>(() => {
+    // Priority: check if we just requested a reset
+    if (localStorage.getItem('onboarding_requested') === 'true') return false;
+    
+    const saved = localStorage.getItem('ambuflow_config');
+    if (saved) {
+      try {
+        const config = JSON.parse(saved);
+        return config.onboarded === true;
+      } catch (e) { return false; }
+    }
+    return false;
+  });
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [primaryRole, setPrimaryRole] = useState<UserRole | ''>('');
   const [weeklyContractHours, setWeeklyContractHours] = useState(35);
@@ -377,7 +396,10 @@ const App: React.FC = () => {
     if (config.hoursBase !== undefined) setHoursBase(prev => prev !== config.hoursBase ? config.hoursBase : prev);
     if (config.cpCalculationMode !== undefined) setCpCalculationMode(prev => prev !== config.cpCalculationMode ? config.cpCalculationMode : prev);
     if (config.modulationStartDate !== undefined) setModulationStartDate(prev => prev !== config.modulationStartDate ? config.modulationStartDate : prev);
-    if (config.modulationWeeks !== undefined) setModulationWeeks(prev => prev !== config.modulationWeeks ? config.modulationWeeks : prev);
+    if (config.modulationWeeks !== undefined) setModulationWeeks(prev => {
+      const val = config.modulationWeeks?.toString();
+      return prev !== val ? val : prev;
+    });
     if (config.initialCpBalance !== undefined) setInitialCpBalance(prev => {
       const newVal = parseFloat(config.initialCpBalance || "0");
       return prev !== newVal ? newVal : prev;
@@ -385,7 +407,13 @@ const App: React.FC = () => {
     if (config.customHours !== undefined) setCustomHours(prev => prev !== config.customHours ? config.customHours : prev);
     if (config.pushEnabled !== undefined) setPushEnabled(prev => prev !== config.pushEnabled ? config.pushEnabled : prev);
     if (config.followSystemTheme !== undefined) setFollowSystemTheme(prev => prev !== config.followSystemTheme ? config.followSystemTheme : prev);
-    if (config.onboarded !== undefined) setOnboarded(prev => prev !== config.onboarded ? config.onboarded : prev);
+    if (config.onboarded !== undefined) {
+      // If we just requested a reset, ignore any 'true' value from Firestore/cache until onboarding is complete again
+      if (localStorage.getItem('onboarding_requested') === 'true' && config.onboarded === true) {
+        return;
+      }
+      setOnboarded(config.onboarded);
+    }
     if (config.roles !== undefined) setRoles(prev => JSON.stringify(prev) !== JSON.stringify(config.roles) ? config.roles : prev);
     if (config.primaryRole !== undefined) setPrimaryRole(prev => prev !== config.primaryRole ? config.primaryRole : prev);
     if (config.weeklyContractHours !== undefined) setWeeklyContractHours(prev => prev !== config.weeklyContractHours ? config.weeklyContractHours : prev);
@@ -395,12 +423,23 @@ const App: React.FC = () => {
     if (config.logs !== undefined) setLogs(prev => JSON.stringify(prev) !== JSON.stringify(config.logs) ? config.logs : prev);
   }, []);
 
+  // Listen for initial mount to apply local config (important for guests and fast-loading)
+  useEffect(() => {
+    const saved = localStorage.getItem('ambuflow_config');
+    if (saved) {
+      try {
+        const config = JSON.parse(saved);
+        applyConfig(config);
+      } catch (e) { console.error("Error loading initial config:", e); }
+    }
+  }, [applyConfig]);
+
   useEffect(() => {
     if (primaryRole) {
       const titles: Record<string, string> = {
-        dea: 'Ambulancier DEA',
+        dea: 'Ambulancier DE',
         auxiliary: 'Auxiliaire Ambulancier',
-        taxi: 'Chauffeur de Taxi'
+        taxi: 'Conducteur Taxi'
       };
       setJobTitle(titles[primaryRole] || jobTitle);
     }
@@ -411,13 +450,29 @@ const App: React.FC = () => {
   // Auth State Listener & Real-time Config Sync
   useEffect(() => {
     let unsubscribeSnapshot: (() => void) | null = null;
+    let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      console.log("Auth state changed. User:", currentUser?.uid);
+      
+      // Safety timeout to unblock UI if Firebase hangs
+      if (loadingTimeoutId) clearTimeout(loadingTimeoutId);
+      loadingTimeoutId = setTimeout(() => {
+        setAuthLoading(false);
+        setConfigLoading(false);
+      }, 10000);
+
       if (!currentUser) {
-        // Mode sans connexion : on utilise un utilisateur local par défaut
-        setUser({ uid: 'local_user', email: 'guest@ambuflow.com' } as any);
+        if (loadingTimeoutId) clearTimeout(loadingTimeoutId);
+        console.log("No user session found.");
+        setUser(null);
         setIsAuthReady(true);
         setAuthLoading(false);
+        setConfigLoading(false);
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
+        }
         return;
       }
       
@@ -427,44 +482,58 @@ const App: React.FC = () => {
       if (currentUser) {
         setAuthLoading(true);
         
+        // Clean up previous subscription if it exists
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
+        }
+        
         // Use onSnapshot for real-time updates
+        const userDocPath = `users/${currentUser.uid}`;
+        console.log("Starting subscription for:", userDocPath);
         const userDocRef = doc(db, 'users', currentUser.uid);
+        
         unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
-          // Avoid re-applying local changes to prevent infinite loops
+          if (loadingTimeoutId) clearTimeout(loadingTimeoutId);
+          setAuthLoading(false);
+          setConfigLoading(false);
+
           if (docSnap.metadata.hasPendingWrites) return;
 
           if (docSnap.exists()) {
             const data = docSnap.data();
             applyConfig(data);
+          } else {
+            console.log("User document does not exist yet.");
+          }
+        }, (error) => {
+          if (loadingTimeoutId) clearTimeout(loadingTimeoutId);
+          console.error("Firestore onSnapshot error:", error);
+          // Check if we still have a user session when the error occurs
+          if (auth.currentUser) {
+             handleFirestoreError(error, OperationType.GET, userDocPath);
+          } else {
+             console.warn("Permission error occurred but session was lost. Ignoring.");
           }
           setAuthLoading(false);
           setConfigLoading(false);
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
-          setAuthLoading(false);
-          setConfigLoading(false);
         });
-      } else {
-        if (unsubscribeSnapshot) {
-          unsubscribeSnapshot();
-          unsubscribeSnapshot = null;
-        }
-        setAuthLoading(false);
-        setConfigLoading(false);
       }
     });
 
     return () => {
       unsubscribeAuth();
       if (unsubscribeSnapshot) unsubscribeSnapshot();
+      if (loadingTimeoutId) clearTimeout(loadingTimeoutId);
     };
   }, [applyConfig]);
 
   const lastSavedConfigRef = useRef<string>("");
   const isSavingRef = useRef<boolean>(false);
+  const isResettingRef = useRef<boolean>(false);
 
   const saveConfig = useCallback(async () => {
-    if (!user || isSavingRef.current) return;
+    if (isSavingRef.current || isResettingRef.current) return;
 
     const config = {
       userName,
@@ -517,6 +586,8 @@ const App: React.FC = () => {
     lastSavedConfigRef.current = configStr;
     localStorage.setItem('ambuflow_config', configStr);
     
+    if (!user) return;
+
     try {
       isSavingRef.current = true;
       await setDoc(doc(db, 'users', user.uid), config, { merge: true });
@@ -532,13 +603,13 @@ const App: React.FC = () => {
   }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, pushEnabled, followSystemTheme, onboarded, roles, primaryRole, weeklyContractHours, overtimeMode, payRateMode]);
 
   useEffect(() => {
-    if (user) {
+    if (user || isGuest) {
       const timeout = setTimeout(() => {
         saveConfig();
       }, 1000); // Debounce saves by 1 second
       return () => clearTimeout(timeout);
     }
-  }, [user, saveConfig]);
+  }, [user, isGuest, saveConfig]);
 
   const handleOnboardingComplete = useCallback((profile: Partial<UserProfile>) => {
     if (profile.firstName) setFirstName(profile.firstName);
@@ -551,10 +622,29 @@ const App: React.FC = () => {
     if (profile.contractStartDate) setContractStartDate(profile.contractStartDate);
     if (profile.autoGeo !== undefined) setAutoGeo(profile.autoGeo);
     if (profile.pushEnabled !== undefined) setPushEnabled(profile.pushEnabled);
-    if (profile.onboarded !== undefined) setOnboarded(profile.onboarded);
-    if (profile.weeklyContractHours !== undefined) setWeeklyContractHours(profile.weeklyContractHours);
-    if (profile.overtimeMode !== undefined) setOvertimeMode(profile.overtimeMode);
+    if (profile.onboarded !== undefined) {
+      setOnboarded(profile.onboarded);
+      if (profile.onboarded === true) {
+        localStorage.removeItem('onboarding_requested');
+      }
+    }
+    if (profile.weeklyContractHours !== undefined) {
+      setWeeklyContractHours(profile.weeklyContractHours);
+      setHoursBase(String(profile.weeklyContractHours));
+    }
+    if (profile.overtimeMode !== undefined) {
+      setOvertimeMode(profile.overtimeMode);
+      // Map onboarding overtimeMode to internal workRegime
+      const modeMapping: Record<string, string> = {
+        'weekly': 'weekly',
+        'biweekly': 'fortnightly',
+        'modulation': 'modulation',
+        'annualized': 'annualization'
+      };
+      setWorkRegime(modeMapping[profile.overtimeMode] || 'weekly');
+    }
     if (profile.modulationWeeks !== undefined) setModulationWeeks(String(profile.modulationWeeks));
+    if (profile.modulationStartDate !== undefined) setModulationStartDate(profile.modulationStartDate);
     if (profile.payRateMode !== undefined) setPayRateMode(profile.payRateMode);
     
     setUserName(`${profile.firstName || ''} ${profile.lastName || ''}`.trim());
@@ -981,14 +1071,18 @@ const App: React.FC = () => {
   }, []);
 
   const handleResetData = useCallback(async () => {
-    if (!user) return;
-
+    isResettingRef.current = true;
     try {
-      // Fetch current doc to preserve email and createdAt
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-      const email = userData.email || user.email;
-      const createdAt = userData.createdAt || new Date().toISOString();
+      // 1. Prepare initial state but preserve critical identity if logged in
+      let email = "guest@ambuflow.com";
+      let createdAt = new Date().toISOString();
+      
+      if (user && user.uid !== 'local_user') {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        email = userData.email || user.email || email;
+        createdAt = userData.createdAt || createdAt;
+      }
 
       const initialData = {
         email,
@@ -998,6 +1092,14 @@ const App: React.FC = () => {
         jobTitle: "Ambulancier DE",
         hourlyRate: "12.79",
         companyName: "",
+        companyCity: "",
+        firstName: "",
+        lastName: "",
+        qualifications: [],
+        entryDate: "",
+        workRegime: "weekly",
+        monthlyHours: "151.67",
+        leaveCalculation: "25",
         autoGeo: true,
         hasDea: false,
         hasAux: false,
@@ -1014,30 +1116,61 @@ const App: React.FC = () => {
         contractType: "CDI",
         hoursBase: "35",
         cpCalculationMode: "25",
-        workRegime: "weekly",
         modulationStartDate: "",
         modulationWeeks: "4",
         initialCpBalance: 0,
         customHours: "",
         followSystemTheme: true,
         pushEnabled: true,
+        onboarded: false, // This triggers the onboarding flow after reload
+        roles: [],
+        primaryRole: "",
+        weeklyContractHours: 35,
+        overtimeMode: "weekly",
+        payRateMode: "100_percent",
+        activeShiftId: null,
+        scheduledShiftId: null,
         shifts: [],
         logs: [],
         updatedAt: new Date().toISOString()
       };
 
-      // 1. Reset Firestore - Overwrite with initial state but keep identity
-      await setDoc(doc(db, 'users', user.uid), initialData);
+      // 2. Reset Firestore if user is not a guest
+      if (user && user.uid !== 'local_user') {
+        // Clear user document
+        await setDoc(doc(db, 'users', user.uid), initialData);
+        
+        // Clear all shifts for this user
+        const shiftsQuery = query(collection(db, 'shifts'), where('userId', '==', user.uid));
+        const shiftsSnapshot = await getDocs(shiftsQuery);
+        const batch = writeBatch(db);
+        shiftsSnapshot.docs.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+      }
       
-      // 2. Clear Local Storage
+      // 3. Clear Local Storage
       localStorage.clear();
+      setIsGuest(false);
 
-      // 3. Success Feedback & Reload
-      window.location.reload();
+      // 4. Sign out
+      await signOut(auth);
+
+      // 5. Success Feedback & Reload
+      addNotification("Compte réinitialisé", "Toutes vos données ont été supprimées et vous avez été déconnecté.", "success");
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+      if (user && user.uid !== 'local_user') {
+        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+      } else {
+        console.error("Error resetting local data:", error);
+      }
     }
-  }, [user]);
+  }, [user, setIsGuest]);
 
   useEffect(() => {
     if (scheduledShiftId) {
@@ -1172,13 +1305,13 @@ const App: React.FC = () => {
     const activeShift = shifts.find(s => s.id === activeShiftId);
     if (!activeShift || !activeShift.start || activeShift.start === '--:--') return "00:00:00";
     
-    const [y, mon, d] = activeShift.day.split('-').map(Number);
+    const [y, mon, d] = (activeShift.day || "").split('-').map(v => parseInt(v) || 0);
     let startDate: Date;
 
     if (activeShift.preciseStart) {
       startDate = new Date(activeShift.preciseStart);
     } else {
-      const [startH, startM] = activeShift.start.split(':').map(Number);
+      const [startH, startM] = (activeShift.start || "00:00").split(':').map(v => parseInt(v) || 0);
       startDate = new Date(y, mon - 1, d, startH, startM, 0, 0);
     }
     
@@ -1638,6 +1771,13 @@ const App: React.FC = () => {
 
     return (
       <div className="p-5 space-y-5 animate-fadeIn pb-32">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">
+              Tableau de Bord
+            </p>
+          </div>
+        </div>
         {roles.length > 1 && (
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {roles.map(role => (
@@ -1650,7 +1790,7 @@ const App: React.FC = () => {
                     : (effectiveDarkMode ? 'bg-slate-900 border-white/5 text-slate-400' : 'bg-white border-slate-100 text-slate-500')
                 }`}
               >
-                {role === 'dea' ? 'Ambulancier DEA' : role === 'auxiliary' ? 'Auxiliaire' : 'Taxi'}
+                {role === 'dea' ? 'Ambulancier DE' : role === 'auxiliary' ? 'Auxiliaire Ambulancier' : 'Conducteur Taxi'}
                 {primaryRole === role && ' ★'}
               </button>
             ))}
@@ -1993,9 +2133,18 @@ const App: React.FC = () => {
                   </div>
                </motion.div>
              </AnimatePresence>
+             {isGuest && (
+                <div className="absolute inset-0 bg-slate-900/5 backdrop-blur-[6px] z-10 flex flex-col items-center justify-center p-4 text-center pointer-events-none">
+                   <Lock className="text-indigo-500 mb-1 opacity-60" size={20} />
+                   <p className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em] opacity-80 leading-tight">Gains Floutés</p>
+                   <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1 opacity-60">Mode Invité Uniquement</p>
+                </div>
+             )}
           </div>
           <div className={`${bentoCardBase} p-6 flex flex-col justify-between aspect-square`}><div className="flex justify-between"><div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-500"><TimerIcon size={20} /></div><div className={`w-1.5 h-1.5 rounded-full bg-indigo-500 ${status === ServiceStatus.WORKING ? 'animate-pulse' : ''}`} /></div><div><p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Amplitude</p><div className="flex items-baseline gap-1"><span className="text-3xl font-black tracking-tighter">{todayStats.amplitude}</span></div></div></div>
           
+          
+
           <div className={`${bentoCardBase} col-span-2 p-6 animate-slideUp`}>
             <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><div className="p-2.5 rounded-xl bg-slate-500/5 text-slate-400"><Car size={18} /></div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Répartition Véhicules</h3></div></div>
             <div className="flex items-center gap-10">
@@ -2035,6 +2184,7 @@ const App: React.FC = () => {
           </div>
 
         </div>
+
         {showBreakModal && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 animate-fadeIn">
             <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-2xl" onClick={() => setShowBreakModal(false)} />
@@ -2140,7 +2290,15 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      {!onboarded && isAuthReady && !authLoading && !configLoading ? (
+      {isAuthReady && !authLoading && !user && !isGuest ? (
+        <Login 
+          onLoginSuccess={() => setIsGuest(false)} 
+          onEnterAsGuest={() => {
+            setIsGuest(true);
+            localStorage.setItem('ambuflow_is_guest', 'true');
+          }} 
+        />
+      ) : !onboarded && isAuthReady && !authLoading ? (
         <Onboarding onComplete={handleOnboardingComplete} />
       ) : (
         <div className={`min-h-screen transition-colors duration-500 font-sans pb-28 flex flex-col relative ${effectiveDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>
@@ -2224,7 +2382,9 @@ const App: React.FC = () => {
                             👋
                           </motion.span>
                         </h1>
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">{companyName || "AmbuFlow"}</p>
+                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">
+                          {companyName || "AmbuFlow"}
+                        </p>
                       </div>
                     </div>
                     <div 
@@ -2273,6 +2433,15 @@ const App: React.FC = () => {
                 setFollowSystemTheme={setFollowSystemTheme} 
                 userStats={userStats} 
                 onResetData={handleResetData}
+                onLogout={async () => {
+                  try {
+                    await auth.signOut();
+                    setIsGuest(false);
+                    localStorage.removeItem('ambuflow_is_guest');
+                  } catch (error) {
+                    console.error("Logout error:", error);
+                  }
+                }}
                 hasDea={hasDea}
                 hasAux={hasAux}
                 hasTaxiCard={hasTaxiCard}
@@ -2309,7 +2478,7 @@ const App: React.FC = () => {
                 taxiCardExpiryDate={taxiCardExpiryDate}
               />}
             </main>
-            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} darkMode={effectiveDarkMode} />
+            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} darkMode={effectiveDarkMode} isGuest={isGuest} />
           </motion.div>
         </AnimatePresence>
       </div>

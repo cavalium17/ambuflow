@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { 
   User, 
   ShieldCheck, 
@@ -30,7 +30,8 @@ import {
   ShieldAlert,
   RefreshCw,
   Camera,
-  Loader2
+  Loader2,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { Shift, ActivityLog, UserStats, UserRole } from '../types';
 import { storage } from '../src/firebaseConfig';
@@ -61,6 +62,7 @@ interface ProfileTabProps {
   setFollowSystemTheme: (val: boolean) => void;
   userStats: UserStats;
   onResetData: () => void;
+  onLogout: () => void;
   hasDea?: boolean;
   hasAux?: boolean;
   hasTaxiCard?: boolean;
@@ -120,6 +122,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   setFollowSystemTheme,
   userStats,
   onResetData,
+  onLogout,
   hasDea = false,
   hasAux = false,
   hasTaxiCard = false,
@@ -155,6 +158,9 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   taxiFpcDate = "",
   taxiCardExpiryDate = ""
 }) => {
+  const [isResetting, setIsResetting] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showModulationDateModal, setShowModulationDateModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -260,6 +266,19 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
     return items;
   }, [afgsuDate, medicalExpiryDate, hasDea, hasAux, hasTaxiCard, taxiFpcDate, taxiCardExpiryDate]);
 
+  const modulationEndDate = useMemo(() => {
+    if (!modulationStartDate || !modulationWeeks) return null;
+    try {
+      const start = new Date(modulationStartDate);
+      const weeks = parseInt(modulationWeeks) || 4;
+      const end = new Date(start);
+      end.setDate(start.getDate() + (weeks * 7) - 1);
+      return end;
+    } catch (e) {
+      return null;
+    }
+  }, [modulationStartDate, modulationWeeks]);
+
   const [isEditingRoles, setIsEditingRoles] = useState(false);
 
   const toggleRole = (role: UserRole) => {
@@ -280,6 +299,42 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   return (
     <div className="p-5 space-y-6 animate-fadeIn pb-32">
       
+      {showModulationDateModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setShowModulationDateModal(false)} />
+          <div className={`relative w-full max-w-sm p-8 rounded-[40px] border ${darkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200'} shadow-2xl animate-scaleIn`}>
+            <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 mb-6 mx-auto">
+              <CalendarIcon size={32} />
+            </div>
+            <h3 className={`text-xl font-black mb-2 text-center ${darkMode ? 'text-white' : 'text-slate-900'}`}>Début de modulation</h3>
+            <p className="text-slate-400 text-center text-[10px] font-bold uppercase tracking-widest mb-8 leading-relaxed">
+              Sélectionnez la date de début de votre cycle de modulation.
+            </p>
+            
+            <div className="space-y-4 mb-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Date de début</label>
+                <input 
+                  type="date" 
+                  value={modulationStartDate}
+                  onChange={(e) => setModulationStartDate?.(e.target.value)}
+                  className={`w-full p-4 rounded-2xl border font-black outline-none transition-all ${
+                    darkMode ? 'bg-slate-950 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                />
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowModulationDateModal(false)}
+              className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-indigo-600/20 active:scale-95 transition-all"
+            >
+              Valider la période
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* IDENTITY HERO */}
       <div className={`${bentoCardBase} p-8 flex flex-col items-center text-center`}>
         <div className="relative mb-6 group cursor-pointer" onClick={handleAvatarClick}>
@@ -329,7 +384,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                       : 'bg-slate-500/10 border border-white/5 text-slate-400'
                   }`}
                 >
-                  {role === 'dea' ? 'DEA' : role === 'auxiliary' ? 'AUX' : 'TAXI'}
+                  {role === 'dea' ? 'Ambulancier DE' : role === 'auxiliary' ? 'Auxiliaire Ambulancier' : 'Conducteur Taxi'}
                   {primaryRole === role && ' ★'}
                 </span>
               ))}
@@ -353,9 +408,9 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             
             <div className="space-y-4 mb-8">
               {[
-                { id: 'dea', label: 'Ambulancier DEA', icon: ShieldCheck },
+                { id: 'dea', label: 'Ambulancier DE', icon: ShieldCheck },
                 { id: 'auxiliary', label: 'Auxiliaire Ambulancier', icon: Users },
-                { id: 'taxi', label: 'Chauffeur de Taxi', icon: Car }
+                { id: 'taxi', label: 'Conducteur Taxi', icon: Car }
               ].map((role) => (
                 <button
                   key={role.id}
@@ -379,6 +434,49 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             >
               Terminer
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMATION RÉINITIALISATION */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[101] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md animate-fadeIn" onClick={() => !isResetting && setShowResetConfirm(false)} />
+          <div className={`relative w-full max-w-sm p-8 rounded-[40px] border ${darkMode ? 'bg-slate-900 border-rose-500/30' : 'bg-white border-rose-100'} shadow-[0_30px_100px_rgba(244,63,94,0.2)] animate-popIn`}>
+            <div className="w-16 h-16 rounded-3xl bg-rose-500/10 flex items-center justify-center text-rose-500 mb-6 mx-auto">
+              <ShieldAlert size={32} />
+            </div>
+            <h3 className={`text-xl font-black mb-3 text-center ${darkMode ? 'text-white' : 'text-slate-900'}`}>Zone de Danger</h3>
+            <p className="text-slate-400 text-center text-xs font-medium leading-relaxed mb-8 uppercase tracking-widest px-4">
+              Êtes-vous certain de vouloir <span className="text-rose-500 font-black underline underline-offset-4">TOUT</span> effacer ? Cette action supprimera définitivement vos heures, vos paramètres et votre profil de la base de données.
+            </p>
+            
+            <div className="space-y-3">
+              <button 
+                onClick={async () => {
+                  setIsResetting(true);
+                  try {
+                    await onResetData();
+                    setShowResetConfirm(false);
+                  } catch (e) {
+                    console.error("Reset sequence failed:", e);
+                  } finally {
+                    setIsResetting(false);
+                  }
+                }}
+                disabled={isResetting}
+                className="w-full py-5 bg-rose-600 text-white font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-rose-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                {isResetting ? <Loader2 className="animate-spin" size={16} /> : <><Trash2 size={16} /> Confirmer la suppression</>}
+              </button>
+              <button 
+                onClick={() => setShowResetConfirm(false)}
+                disabled={isResetting}
+                className="w-full py-5 text-slate-400 font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-slate-500/5 transition-all"
+              >
+                Annuler
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -429,8 +527,12 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                   onChange={(e) => {
                     const mode = e.target.value as any;
                     setOvertimeMode(mode);
-                    if (mode === 'modulation') setWorkRegime('modulation');
-                    else setWorkRegime('weekly');
+                    if (mode === 'modulation') {
+                      setWorkRegime('modulation');
+                      setShowModulationDateModal(true);
+                    } else {
+                      setWorkRegime('weekly');
+                    }
                   }}
                   className={`bg-transparent text-sm font-black text-right outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
                 >
@@ -441,17 +543,43 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                 </select>
               </div>
               {overtimeMode === 'modulation' && (
-                <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cycle (semaines)</span>
-                  <select 
-                    value={modulationWeeks}
-                    onChange={(e) => setModulationWeeks(e.target.value)}
-                    className={`bg-transparent text-xs font-black text-right outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+                <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Cycle (semaines)</span>
+                    <select 
+                      value={modulationWeeks}
+                      onChange={(e) => setModulationWeeks?.(e.target.value)}
+                      className={`bg-transparent text-xs font-black text-right outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+                    >
+                      {[4, 5, 6, 7, 8, 9, 10, 11, 12].map(w => (
+                        <option key={w} value={w.toString()}>{w} semaines</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button 
+                    onClick={() => setShowModulationDateModal(true)}
+                    className="flex items-center justify-between group hover:opacity-80 transition-opacity"
                   >
-                    <option value="4">4 semaines</option>
-                    <option value="8">8 semaines</option>
-                    <option value="12">12 semaines</option>
-                  </select>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date Début</span>
+                    <span className="text-xs font-black text-indigo-500 underline underline-offset-4 decoration-indigo-500/30">
+                      {modulationStartDate ? formatDate(modulationStartDate) : 'Définir'}
+                    </span>
+                  </button>
+                  {modulationEndDate && (
+                    <div className="flex flex-col gap-2 bg-indigo-500/5 p-3 rounded-xl border border-indigo-500/10">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Cycle en cours</span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] font-black text-indigo-400">
+                            {formatDate(modulationStartDate)} au
+                          </span>
+                          <span className="text-[10px] font-black text-indigo-400">
+                            {formatDate(modulationEndDate.toISOString().split('T')[0])}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -548,12 +676,18 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
           </div>
 
           <div className="pt-6 border-t border-white/5">
+            <div className="mb-4">
+              <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-[0.2em] mb-1">Zone de Danger</h4>
+              <p className="text-[9px] font-medium text-slate-500 uppercase tracking-widest leading-relaxed">
+                Réinitialisation complète du compte et des données en base.
+              </p>
+            </div>
             <button 
-              onClick={onResetData} 
-              className="w-full p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center gap-3 group active:scale-[0.98] transition-all"
+              onClick={() => setShowResetConfirm(true)} 
+              className="w-full p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center gap-3 group active:scale-[0.98] transition-all hover:bg-rose-500/20 shadow-lg shadow-rose-500/5"
             >
               <Trash2 size={18} className="text-rose-500" />
-              <span className="font-black uppercase tracking-widest text-[10px] text-rose-500">Effacer toutes les données</span>
+              <span className="font-black uppercase tracking-widest text-[10px] text-rose-500">Supprimer mes données</span>
             </button>
           </div>
         </div>
@@ -561,7 +695,15 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 
       {/* ACTIONS */}
       <div className="space-y-4">
-        {/* Logout button removed */}
+        <button 
+          onClick={onLogout} 
+          className="w-full p-6 rounded-[28px] bg-slate-900 border border-white/5 flex items-center justify-center gap-4 group active:scale-[0.98] transition-all shadow-xl"
+        >
+          <div className="p-2 rounded-xl bg-rose-500/10 text-rose-500 group-hover:bg-rose-500 group-hover:text-white transition-all">
+            <LogOut size={20} />
+          </div>
+          <span className="font-black uppercase tracking-[0.2em] text-[11px] text-slate-200">Se déconnecter</span>
+        </button>
       </div>
     </div>
   );
