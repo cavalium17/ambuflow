@@ -370,19 +370,21 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                 <div className="grid grid-cols-2 gap-4">
                   {/* Primary Capsule Button */}
                   <button 
-                    type="submit" 
-                    disabled={loading}
-                    className="group relative flex items-center justify-center gap-2 px-6 py-4 bg-[#0F172A] text-white font-black uppercase tracking-[0.15em] rounded-full shadow-[0_12px_24px_-8px_rgba(15,23,42,0.4)] hover:shadow-[0_16px_32px_-8px_rgba(15,23,42,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all text-[10px] disabled:opacity-50 overflow-hidden"
-                  >
-                    <span className="text-center whitespace-nowrap">
-  {loading ? (
-    <Loader2 className="animate-spin" size={16} />
-  ) : (
-    isLogin ? 'SE CONNECTER' : "S'INSCRIRE"
+  type="submit" 
+  disabled={loading}
+  className="group relative flex items-center justify-center gap-1.5 px-4 py-4 bg-[#0F172A] text-white font-black uppercase tracking-[0.1em] rounded-full shadow-[0_12px_24px_-8px_rgba(15,23,42,0.4)] hover:shadow-[0_16px_32px_-8px_rgba(15,23,42,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all text-[10px] disabled:opacity-50 overflow-hidden w-full"
+>
+  <span className="text-center whitespace-nowrap">
+    {loading ? (
+      <Loader2 className="animate-spin" size={16} />
+    ) : (
+      isLogin ? 'SE CONNECTER' : "S'INSCRIRE"
+    )}
+  </span>
+  {!loading && (
+    <ChevronRight size={14} className="flex-shrink-0 text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
   )}
-</span>
-                    <ChevronRight size={14} className="text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-                  </button>
+</button>
 
                   {/* Secondary Capsule Button */}
                   <button 
