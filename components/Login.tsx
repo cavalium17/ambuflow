@@ -299,7 +299,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
                     <div className="relative group">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-200 group-focus-within:text-[#0F172A] transition-colors" size={16} />
+                      <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-200 group-focus-within:text-[#0F172A] transition-colors" size={16} />
                       <input 
                         type="email" 
                         value={email}
@@ -320,7 +320,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                           onClick={handleResetPassword}
                           className="text-[9px] font-black text-indigo-400 hover:text-indigo-600 uppercase tracking-widest"
                         >
-                          Oublié ?
+                          MOT DE PASSE OUBLIÉ ?
                         </button>
                       )}
                     </div>
@@ -409,7 +409,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
               onClick={onEnterAsGuest}
               className="text-slate-400 font-black uppercase tracking-[0.3em] text-[9px] hover:text-[#0F172A] transition-colors"
             >
-              Accès Invité
+              ACCÈS INVITÉ
             </button>
           </motion.div>
         </div>
