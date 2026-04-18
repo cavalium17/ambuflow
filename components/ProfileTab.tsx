@@ -61,7 +61,7 @@ interface ProfileTabProps {
   followSystemTheme: boolean;
   setFollowSystemTheme: (val: boolean) => void;
   userStats: UserStats;
-  onResetData: () => void;
+  onDeleteAccount: () => void;
   onLogout: () => void;
   hasDea?: boolean;
   hasAux?: boolean;
@@ -121,7 +121,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   followSystemTheme,
   setFollowSystemTheme,
   userStats,
-  onResetData,
+  onDeleteAccount,
   onLogout,
   hasDea = false,
   hasAux = false,
@@ -446,24 +446,24 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             <div className="w-16 h-16 rounded-3xl bg-rose-500/10 flex items-center justify-center text-rose-500 mb-6 mx-auto">
               <ShieldAlert size={32} />
             </div>
-            <h3 className={`text-xl font-black mb-3 text-center ${darkMode ? 'text-white' : 'text-slate-900'}`}>Zone de Danger</h3>
+            <h3 className={`text-xl font-black mb-3 text-center ${darkMode ? 'text-white' : 'text-slate-900'}`}>Suppression Définitive</h3>
             <p className="text-slate-400 text-center text-xs font-medium leading-relaxed mb-8 uppercase tracking-widest px-4">
-              Êtes-vous certain de vouloir <span className="text-rose-500 font-black underline underline-offset-4">TOUT</span> effacer ? Cette action supprimera définitivement vos heures, vos paramètres et votre profil de la base de données.
+              Cette action est <span className="text-rose-500 font-black underline underline-offset-4">IRRÉVERSIBLE</span>. Votre compte Auth et toutes vos données Firestore seront supprimés.
             </p>
             
             <div className="space-y-3">
               <button 
                 onClick={async () => {
-                  setIsResetting(true);
-                  try {
-                    await onResetData();
-                    setShowResetConfirm(false);
-                  } catch (e) {
-                    console.error("Reset sequence failed:", e);
-                  } finally {
-                    setIsResetting(false);
-                  }
-                }}
+                   setIsResetting(true);
+                   try {
+                     await onDeleteAccount();
+                     setShowResetConfirm(false);
+                   } catch (e) {
+                     console.error("Delete sequence failed:", e);
+                   } finally {
+                     setIsResetting(false);
+                   }
+                 }}
                 disabled={isResetting}
                 className="w-full py-5 bg-rose-600 text-white font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-rose-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
@@ -687,7 +687,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               className="w-full p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center gap-3 group active:scale-[0.98] transition-all hover:bg-rose-500/20 shadow-lg shadow-rose-500/5"
             >
               <Trash2 size={18} className="text-rose-500" />
-              <span className="font-black uppercase tracking-widest text-[10px] text-rose-500">Supprimer mes données</span>
+              <span className="font-black uppercase tracking-widest text-[10px] text-rose-500">Supprimer mon compte</span>
             </button>
           </div>
         </div>

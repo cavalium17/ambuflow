@@ -60,7 +60,7 @@ import DailyRecap from './components/DailyRecap';
 import Onboarding from './components/Onboarding';
 import Login from './components/Login';
 import { auth, db } from './src/firebaseConfig';
-import { onAuthStateChanged, User as FirebaseUser, signOut } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser, signOut, deleteUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
 import { requestNotificationPermissions, requestLocationPermissions, setupNotificationChannels } from './services/notificationManager';
 import { requestForToken, onMessageListener } from './src/firebaseConfig';
@@ -1171,6 +1171,62 @@ const App: React.FC = () => {
       }
     }
   }, [user, setIsGuest]);
+
+  const handleHardDelete = useCallback(async () => {
+    if (!user || user.uid === 'local_user') {
+      await handleResetData();
+      return;
+    }
+
+    isResettingRef.current = true;
+    try {
+      const uid = user.uid;
+
+      // 1. Delete Firestore Data (Cascade)
+      await deleteDoc(doc(db, 'users', uid));
+      
+      const shiftsQuery = query(collection(db, 'shifts'), where('userId', '==', uid));
+      const shiftsSnapshot = await getDocs(shiftsQuery);
+      const batch = writeBatch(db);
+      shiftsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      // 2. Delete Firebase Auth User
+      try {
+        await deleteUser(user);
+      } catch (authError: any) {
+        if (authError.code === 'auth/requires-recent-login') {
+          alert("Pour des raisons de sécurité, vous devez vous reconnecter avant de supprimer définitivement votre compte.");
+          await signOut(auth);
+          localStorage.clear();
+          sessionStorage.clear();
+          window.location.href = '/';
+          return;
+        }
+        throw authError;
+      }
+
+      // 3. Cleanup Client State
+      localStorage.clear();
+      sessionStorage.clear();
+      setIsGuest(false);
+
+      // 4. Redirect to Root
+      addNotification("Compte supprimé", "Votre compte et vos données ont été définitivement supprimés.", "success");
+      
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
+
+    } catch (error) {
+      console.error("Hard delete failed:", error);
+      alert("Une erreur est survenue lors de la suppression définitive du compte. Veuillez réessayer.");
+    } finally {
+      isResettingRef.current = false;
+    }
+  }, [user, handleResetData, setIsGuest, addNotification]);
 
   useEffect(() => {
     if (scheduledShiftId) {
@@ -2432,7 +2488,7 @@ const App: React.FC = () => {
                 followSystemTheme={followSystemTheme} 
                 setFollowSystemTheme={setFollowSystemTheme} 
                 userStats={userStats} 
-                onResetData={handleResetData}
+                onDeleteAccount={handleHardDelete}
                 onLogout={async () => {
                   try {
                     await auth.signOut();
