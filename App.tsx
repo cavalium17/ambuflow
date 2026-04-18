@@ -1172,19 +1172,28 @@ const App: React.FC = () => {
       };
 
       // 2. Reset Firestore if user is not a guest
-      if (user && user.uid !== 'local_user') {
-        // Clear user document
-        await setDoc(doc(db, 'users', user.uid), initialData);
-        
-        // Clear all shifts for this user
-        const shiftsQuery = query(collection(db, 'shifts'), where('userId', '==', user.uid));
-        const shiftsSnapshot = await getDocs(shiftsQuery);
-        const batch = writeBatch(db);
-        shiftsSnapshot.docs.forEach((doc) => {
-          batch.delete(doc.ref);
-        });
-        await batch.commit();
-      }
+const resetFirestoreData = async () => {
+  if (user && user.uid !== 'local_user') {
+    await setDoc(doc(db, 'users', user.uid), initialData);
+
+    const shiftsQuery = query(
+      collection(db, 'shifts'),
+      where('userId', '==', user.uid)
+    );
+
+    const shiftsSnapshot = await getDocs(shiftsQuery);
+    const batch = writeBatch(db);
+
+    shiftsSnapshot.docs.forEach((docItem) => {
+      batch.delete(docItem.ref);
+    });
+
+    await batch.commit();
+  }
+};
+
+// 👉 appel de la fonction
+await resetFirestoreData();
       
       // 3. Clear Local Storage
       localStorage.clear();
