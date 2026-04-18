@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, Component, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -1073,7 +1072,7 @@ const App: React.FC = () => {
   const handleResetData = useCallback(async () => {
     isResettingRef.current = true;
     try {
-      // 1. Prepare initial state but preserve critical identity if logged in
+      // 1. Préparation des données initiales
       let email = "guest@ambuflow.com";
       let createdAt = new Date().toISOString();
       
@@ -1083,6 +1082,78 @@ const App: React.FC = () => {
         email = userData.email || user.email || email;
         createdAt = userData.createdAt || createdAt;
       }
+
+      // 2. Nettoyage des données (Heures, Planning, Réglages)
+      const initialState = {
+        shifts: [],
+        workRegime: '100%',
+        dailyHours: '7.00',
+        userName: '',
+        firstName: '',
+        lastName: '',
+        companyName: '',
+        jobTitle: '',
+        email: email,
+        createdAt: createdAt,
+        lastSynced: new Date().toISOString()
+      };
+
+      if (user && user.uid !== 'local_user') {
+        await setDoc(doc(db, 'users', user.uid), initialState);
+      }
+
+      // 3. Mise à jour de l'interface locale
+      setShifts([]);
+      setWorkRegime('100%');
+      setDailyHours('7.00');
+      setUserName('');
+      setFirstName('');
+      setLastName('');
+      setCompanyName('');
+      setJobTitle('');
+      
+      alert("Données réinitialisées avec succès.");
+    } catch (error) {
+      console.error("Erreur lors de la réinitialisation:", error);
+      alert("Erreur lors de la réinitialisation des données.");
+    } finally {
+      isResettingRef.current = false;
+    }
+  }, [user, db]);
+
+  // --- NOUVELLE FONCTION DE SUPPRESSION TOTALE ---
+  const handleDeleteAccount = useCallback(async () => {
+    if (!user || user.uid === 'local_user') {
+      alert("Impossible de supprimer un compte invité.");
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      "ATTENTION : Cette action supprimera définitivement votre compte et TOUTES vos données. Voulez-vous continuer ?"
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      // 1. On supprime les données dans la base (Firestore)
+      await deleteDoc(doc(db, 'users', user.uid));
+      
+      // 2. On supprime l'accès utilisateur (Auth)
+      await deleteUser(user);
+      
+      // 3. On nettoie tout et on repart à zéro
+      localStorage.clear();
+      window.location.reload();
+      
+    } catch (error: any) {
+      console.error("Erreur suppression:", error);
+      if (error.code === 'auth/requires-recent-login') {
+        alert("Par sécurité, veuillez vous déconnecter et vous reconnecter avant de supprimer votre compte.");
+      } else {
+        alert("Une erreur est survenue. Vérifiez vos règles de sécurité Firestore.");
+      }
+    }
+  }, [user, db]);
 
       const initialData = {
         email,
