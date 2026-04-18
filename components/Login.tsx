@@ -39,6 +39,50 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
   const [resetSent, setResetSent] = useState(false);
   const [showUserNotFoundModal, setShowUserNotFoundModal] = useState(false);
   
+  const handlePasskeyAuth = async () => {
+    if (!window.PublicKeyCredential) {
+      setError("Les Passkeys ne sont pas supportés sur ce navigateur.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // For a real implementation, you'd fetch a challenge from your server first.
+      // Here we simulate the device biometric prompt using WebAuthn API.
+      
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      const options: CredentialRequestOptions = {
+        publicKey: {
+          challenge: challenge,
+          timeout: 60000,
+          userVerification: "required",
+          rpId: window.location.hostname === "localhost" ? "localhost" : window.location.hostname,
+        }
+      };
+
+      // This will trigger the smartphone/computer biometric prompt (FaceID/Fingerprint)
+      const credential = await navigator.credentials.get(options);
+
+      if (credential) {
+        // In a real app, you would send the credential to your backend to verify and sign in.
+        // For this demo, we'll simulate a successful authentication.
+        console.log("Passkey authenticated successfully", credential);
+        if (onLoginSuccess) onLoginSuccess();
+      }
+    } catch (err: any) {
+      console.error("Passkey error:", err);
+      if (err.name !== 'NotAllowedError') { // Ignore user cancelation
+        setError("Échec de l'authentification Passkey. Assurez-vous d'avoir configuré un Passkey pour ce domaine.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -187,7 +231,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
             className="space-y-4"
           >
             <button 
-              className="w-full group relative flex items-center justify-between p-5 bg-white border border-slate-100 rounded-[24px] shadow-sm hover:shadow-md hover:border-indigo-100 transition-all active:scale-[0.99]"
+              onClick={handlePasskeyAuth}
+              disabled={loading}
+              className="w-full group relative flex items-center justify-between p-5 bg-white border border-slate-100 rounded-[24px] shadow-sm hover:shadow-md hover:border-indigo-100 transition-all active:scale-[0.99] disabled:opacity-50"
             >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
