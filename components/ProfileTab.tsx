@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useMemo } from 'react';
 import { 
   User, 
@@ -96,6 +97,8 @@ interface ProfileTabProps {
   medicalExpiryDate?: string;
   taxiFpcDate?: string;
   taxiCardExpiryDate?: string;
+  supplementaryTaskType?: 'none' | 'type_1' | 'type_2' | 'type_3';
+  setSupplementaryTaskType?: (val: 'none' | 'type_1' | 'type_2' | 'type_3') => void;
 }
 
 const ProfileTab: React.FC<ProfileTabProps> = ({
@@ -155,7 +158,9 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   afgsuDate = "",
   medicalExpiryDate = "",
   taxiFpcDate = "",
-  taxiCardExpiryDate = ""
+  taxiCardExpiryDate = "",
+  supplementaryTaskType = 'none',
+  setSupplementaryTaskType
 }) => {
   const [isResetting, setIsResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -614,13 +619,58 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                 <span className="text-sm font-black text-emerald-500">€/h</span>
               </div>
             </div>
+
+            {/* Missions Complémentaires */}
+            <div className="flex flex-col gap-3 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Award size={16} className="text-amber-500" />
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Mission Complém.</span>
+                </div>
+                <select 
+                  value={supplementaryTaskType}
+                  onChange={(e) => setSupplementaryTaskType?.(e.target.value as any)}
+                  className={`bg-transparent text-sm font-black text-right outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+                >
+                  <option value="none">Aucune</option>
+                  <option value="type_1">Type 1 (+2%)</option>
+                  <option value="type_2">Type 2 (+5%)</option>
+                  <option value="type_3">Type 3 (+10%)</option>
+                </select>
+              </div>
+              {supplementaryTaskType !== 'none' && (
+                <div className="pt-2 border-t border-white/5 flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Bonus appliqué</span>
+                  <span className="text-[10px] font-black text-emerald-500">
+                    {supplementaryTaskType === 'type_1' ? '+2%' : supplementaryTaskType === 'type_2' ? '+5%' : '+10%'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Majoration Ancienneté ({seniorityBonus})</span>
-              <span className="text-sm font-black text-indigo-400">{effectiveHourlyRate} €/h</span>
+          <div className="space-y-2">
+            <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Majoration Ancienneté ({seniorityBonus})</span>
+                <span className="text-sm font-black text-indigo-400">{effectiveHourlyRate} €/h</span>
+              </div>
             </div>
+            {supplementaryTaskType !== 'none' && (
+               <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
+                 <div className="flex justify-between items-center">
+                   <div className="flex flex-col">
+                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Bonus Mission Complém.</span>
+                     <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest italic leading-none mt-0.5">
+                       {supplementaryTaskType === 'type_1' ? 'Conduite non sanitaire, corps...' : supplementaryTaskType === 'type_2' ? 'Taxi, Funéraire...' : 'Régulation, Mécanique...'}
+                     </span>
+                   </div>
+                   <span className="text-sm font-black text-emerald-500">
+                     +{supplementaryTaskType === 'type_1' ? '2' : supplementaryTaskType === 'type_2' ? '5' : '10'} %
+                   </span>
+                 </div>
+               </div>
+            )}
           </div>
         </div>
       </div>

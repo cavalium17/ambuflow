@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, Component, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -300,6 +301,7 @@ const App: React.FC = () => {
   const [modulationWeeks, setModulationWeeks] = useState("4");
   const [initialCpBalance, setInitialCpBalance] = useState(0);
   const [customHours, setCustomHours] = useState("");
+  const [weekendDays, setWeekendDays] = useState<string[]>([]);
   const [followSystemTheme, setFollowSystemTheme] = useState(true);
   const [onboarded, setOnboarded] = useState<boolean>(() => {
     // Priority: check if we just requested a reset
@@ -319,6 +321,7 @@ const App: React.FC = () => {
   const [weeklyContractHours, setWeeklyContractHours] = useState(35);
   const [overtimeMode, setOvertimeMode] = useState<'weekly' | 'biweekly' | 'modulation' | 'annualized'>('weekly');
   const [payRateMode, setPayRateMode] = useState<'100_percent' | '90_percent'>('100_percent');
+  const [supplementaryTaskType, setSupplementaryTaskType] = useState<'none' | 'type_1' | 'type_2' | 'type_3'>('none');
 
   // Missing States
   const [status, setStatus] = useState<ServiceStatus>(() => {
@@ -404,6 +407,7 @@ const App: React.FC = () => {
       return prev !== newVal ? newVal : prev;
     });
     if (config.customHours !== undefined) setCustomHours(prev => prev !== config.customHours ? config.customHours : prev);
+    if (config.weekendDays !== undefined) setWeekendDays(prev => JSON.stringify(prev) !== JSON.stringify(config.weekendDays) ? config.weekendDays : prev);
     if (config.pushEnabled !== undefined) setPushEnabled(prev => prev !== config.pushEnabled ? config.pushEnabled : prev);
     if (config.followSystemTheme !== undefined) setFollowSystemTheme(prev => prev !== config.followSystemTheme ? config.followSystemTheme : prev);
     if (config.onboarded !== undefined) {
@@ -418,6 +422,7 @@ const App: React.FC = () => {
     if (config.weeklyContractHours !== undefined) setWeeklyContractHours(prev => prev !== config.weeklyContractHours ? config.weeklyContractHours : prev);
     if (config.overtimeMode !== undefined) setOvertimeMode(prev => prev !== config.overtimeMode ? config.overtimeMode : prev);
     if (config.payRateMode !== undefined) setPayRateMode(prev => prev !== config.payRateMode ? config.payRateMode : prev);
+    if (config.supplementaryTaskType !== undefined) setSupplementaryTaskType(prev => prev !== config.supplementaryTaskType ? config.supplementaryTaskType : prev);
     if (config.shifts !== undefined) setShifts(prev => JSON.stringify(prev) !== JSON.stringify(config.shifts) ? config.shifts : prev);
     if (config.logs !== undefined) setLogs(prev => JSON.stringify(prev) !== JSON.stringify(config.logs) ? config.logs : prev);
   }, []);
@@ -568,6 +573,7 @@ const App: React.FC = () => {
       modulationWeeks,
       initialCpBalance,
       customHours,
+      weekendDays,
       pushEnabled,
       followSystemTheme,
       onboarded,
@@ -576,6 +582,7 @@ const App: React.FC = () => {
       weeklyContractHours,
       overtimeMode,
       payRateMode,
+      supplementaryTaskType,
       updatedAt: new Date().toISOString()
     };
     
@@ -599,7 +606,7 @@ const App: React.FC = () => {
     } finally {
       isSavingRef.current = false;
     }
-  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, pushEnabled, followSystemTheme, onboarded, roles, primaryRole, weeklyContractHours, overtimeMode, payRateMode]);
+  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, weekendDays, pushEnabled, followSystemTheme, onboarded, roles, primaryRole, weeklyContractHours, overtimeMode, payRateMode]);
 
   useEffect(() => {
     if (user || isGuest) {
@@ -645,6 +652,7 @@ const App: React.FC = () => {
     if (profile.modulationWeeks !== undefined) setModulationWeeks(String(profile.modulationWeeks));
     if (profile.modulationStartDate !== undefined) setModulationStartDate(profile.modulationStartDate);
     if (profile.payRateMode !== undefined) setPayRateMode(profile.payRateMode);
+    if (profile.supplementaryTaskType !== undefined) setSupplementaryTaskType(profile.supplementaryTaskType as any);
     
     setUserName(`${profile.firstName || ''} ${profile.lastName || ''}`.trim());
     
@@ -795,8 +803,15 @@ const App: React.FC = () => {
 
   const effectiveHourlyRate = useMemo(() => {
     const base = parseFloat(hourlyRate) || 0;
-    return (base * (1 + seniorityInfo.bonus)).toFixed(2);
-  }, [hourlyRate, seniorityInfo.bonus]);
+    const taskBonusMap = {
+      none: 0,
+      type_1: 0.02,
+      type_2: 0.05,
+      type_3: 0.10
+    };
+    const taskBonus = taskBonusMap[supplementaryTaskType as keyof typeof taskBonusMap] || 0;
+    return (base * (1 + seniorityInfo.bonus + taskBonus)).toFixed(2);
+  }, [hourlyRate, seniorityInfo.bonus, supplementaryTaskType]);
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -1070,55 +1085,18 @@ const App: React.FC = () => {
   }, []);
 
   const handleResetData = useCallback(async () => {
-    if (!user) return;
-    
-    const confirmReset = window.confirm("Voulez-vous vraiment réinitialiser toutes vos données ?");
-    if (!confirmReset) return;
-
     isResettingRef.current = true;
     try {
-      // On récupère les infos minimales pour garder le compte valide
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
-      const userData = userDoc.exists() ? userDoc.data() : {};
-
-      const initialState = {
-        email: user.email || userData.email || "",
-        createdAt: userData.createdAt || new Date().toISOString(),
-        userName: "",
-        firstName: "",
-        lastName: "",
-        companyName: "",
-        jobTitle: "Ambulancier DE",
-        shifts: [],
-        logs: [],
-        onboarded: false, 
-        updatedAt: new Date().toISOString()
-      };
-
-      // Mise à jour Firestore (le await est ici bien placé)
-      if (user.uid !== 'local_user') {
-        await setDoc(userDocRef, initialState);
-      }
-
-      // Mise à jour de l'interface locale
-      setShifts([]);
-      setLogs([]);
-      setFirstName("");
-      setLastName("");
-      setCompanyName("");
-      setOnboarded(false);
+      // 1. Prepare initial state but preserve critical identity if logged in
+      let email = "guest@ambuflow.com";
+      let createdAt = new Date().toISOString();
       
-      alert("Données réinitialisées avec succès.");
-      window.location.reload();
-
-    } catch (error) {
-      console.error("Erreur reset:", error);
-      alert("Erreur lors de la réinitialisation.");
-    } finally {
-      isResettingRef.current = false;
-    }
-  }, [user, db, setShifts, setLogs, setFirstName, setLastName, setCompanyName, setOnboarded]);
+      if (user && user.uid !== 'local_user') {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        email = userData.email || user.email || email;
+        createdAt = userData.createdAt || createdAt;
+      }
 
       const initialData = {
         email,
@@ -1172,28 +1150,19 @@ const App: React.FC = () => {
       };
 
       // 2. Reset Firestore if user is not a guest
-const resetFirestoreData = async () => {
-  if (user && user.uid !== 'local_user') {
-    await setDoc(doc(db, 'users', user.uid), initialData);
-
-    const shiftsQuery = query(
-      collection(db, 'shifts'),
-      where('userId', '==', user.uid)
-    );
-
-    const shiftsSnapshot = await getDocs(shiftsQuery);
-    const batch = writeBatch(db);
-
-    shiftsSnapshot.docs.forEach((docItem) => {
-      batch.delete(docItem.ref);
-    });
-
-    await batch.commit();
-  }
-};
-
-// 👉 appel de la fonction
-await resetFirestoreData();
+      if (user && user.uid !== 'local_user') {
+        // Clear user document
+        await setDoc(doc(db, 'users', user.uid), initialData);
+        
+        // Clear all shifts for this user
+        const shiftsQuery = query(collection(db, 'shifts'), where('userId', '==', user.uid));
+        const shiftsSnapshot = await getDocs(shiftsQuery);
+        const batch = writeBatch(db);
+        shiftsSnapshot.docs.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+      }
       
       // 3. Clear Local Storage
       localStorage.clear();
@@ -2246,17 +2215,19 @@ await resetFirestoreData();
           
           
 
-          <div className={`${bentoCardBase} col-span-2 p-6 animate-slideUp`}>
-            <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><div className="p-2.5 rounded-xl bg-slate-500/5 text-slate-400"><Car size={18} /></div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Répartition Véhicules</h3></div></div>
-            <div className="flex items-center gap-10">
-              <div className="relative w-28 h-28 flex-shrink-0"><div className="w-full h-full rounded-full transition-all duration-1000 shadow-xl" style={{ background: vehicleDistribution.gradient }} /><div className={`absolute inset-3 rounded-full flex items-center justify-center ${effectiveDarkMode ? 'bg-slate-900 shadow-inner shadow-black/60' : 'bg-white shadow-inner shadow-slate-200'}`}><Car size={20} className="text-slate-300 opacity-40" /></div></div>
-              <div className="flex-1 space-y-4">
-                <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#FF4B5C]" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">ASSU</span></div><span className="text-xs font-black tabular-nums">{vehicleDistribution.assu}%</span></div>
-                <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#10b981]" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">AMBU</span></div><span className="text-xs font-black tabular-nums">{vehicleDistribution.ambu}%</span></div>
-                <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#6366f1]" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">VSL</span></div><span className="text-xs font-black tabular-nums">{vehicleDistribution.vsl}%</span></div>
+          {primaryRole !== 'taxi' && (
+            <div className={`${bentoCardBase} col-span-2 p-6 animate-slideUp`}>
+              <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><div className="p-2.5 rounded-xl bg-slate-500/5 text-slate-400"><Car size={18} /></div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Répartition Véhicules</h3></div></div>
+              <div className="flex items-center gap-10">
+                <div className="relative w-28 h-28 flex-shrink-0"><div className="w-full h-full rounded-full transition-all duration-1000 shadow-xl" style={{ background: vehicleDistribution.gradient }} /><div className={`absolute inset-3 rounded-full flex items-center justify-center ${effectiveDarkMode ? 'bg-slate-900 shadow-inner shadow-black/60' : 'bg-white shadow-inner shadow-slate-200'}`}><Car size={20} className="text-slate-300 opacity-40" /></div></div>
+                <div className="flex-1 space-y-4">
+                  <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#FF4B5C]" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">ASSU</span></div><span className="text-xs font-black tabular-nums">{vehicleDistribution.assu}%</span></div>
+                  <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#10b981]" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">AMBU</span></div><span className="text-xs font-black tabular-nums">{vehicleDistribution.ambu}%</span></div>
+                  <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#6366f1]" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">VSL</span></div><span className="text-xs font-black tabular-nums">{vehicleDistribution.vsl}%</span></div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* COMPTEURS DE SOLDES */}
           <div className={`${bentoCardBase} col-span-2 p-6`}>
@@ -2507,7 +2478,7 @@ await resetFirestoreData();
             })()}
             <main className="flex-1 max-w-xl mx-auto w-full">
               {activeTab === 'home' && renderHome()}
-              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} setShifts={setShifts} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} contractStartDate={contractStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}
+              {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} setShifts={setShifts} weekendDays={weekendDays} setWeekendDays={setWeekendDays} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} contractStartDate={contractStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}
               {activeTab === 'paie' && <PaieTab logs={logs} darkMode={effectiveDarkMode} hasTaxiCard={hasTaxiCard} hourlyRate={effectiveHourlyRate} weeklyContractHours={weeklyContractHours} overtimeMode={overtimeMode} payRateMode={payRateMode} workRegime={workRegime} shifts={shifts} cpCalculationMode={cpCalculationMode as '25' | '30'} />}
               {activeTab === 'profile' && <ProfileTab 
                 darkMode={effectiveDarkMode} 
@@ -2577,6 +2548,8 @@ await resetFirestoreData();
                 medicalExpiryDate={medicalExpiryDate}
                 taxiFpcDate={taxiFpcDate}
                 taxiCardExpiryDate={taxiCardExpiryDate}
+                supplementaryTaskType={supplementaryTaskType}
+                setSupplementaryTaskType={setSupplementaryTaskType}
               />}
             </main>
             <Navigation activeTab={activeTab} setActiveTab={setActiveTab} darkMode={effectiveDarkMode} isGuest={isGuest} />

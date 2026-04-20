@@ -41,6 +41,7 @@
         "overtimeMode": { "type": "string", "enum": ["weekly", "biweekly", "modulation", "annualized"] },
         "modulationWeeks": { "type": "number" },
         "payRateMode": { "type": "string", "enum": ["100_percent", "90_percent"] },
+        "supplementaryTaskType": { "type": "string", "enum": ["none", "type_1", "type_2", "type_3"] },
         "customHours": { "type": "string" },
         "followSystemTheme": { "type": "boolean" },
         "pushEnabled": { "type": "boolean" },

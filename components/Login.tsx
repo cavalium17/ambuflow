@@ -11,20 +11,25 @@ import {
   Chrome,
   UserCircle,
   Fingerprint,
-  Apple,
   Eye,
   EyeOff,
   Plus,
   HelpCircle,
   Info
 } from 'lucide-react';
-import { auth, googleProvider } from '../src/firebaseConfig';
+import { auth, googleProvider, db } from '../src/firebaseConfig';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithPopup
 } from 'firebase/auth';
+import { 
+  doc, 
+  setDoc, 
+  getDoc,
+  serverTimestamp 
+} from 'firebase/firestore';
 
 interface LoginProps {
   onLoginSuccess?: () => void;
@@ -37,7 +42,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | React.ReactNode | null>(null);
   const [resetSent, setResetSent] = useState(false);
   const [showUserNotFoundModal, setShowUserNotFoundModal] = useState(false);
   
@@ -85,6 +90,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
     }
   };
 
+  const handleAppleLogin = () => {
+    setError("La connexion avec Apple sera disponible prochainement.");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -94,11 +103,25 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Explicitly connect to Firestore to initialize the user profile
+        await setDoc(doc(db, 'users', user.uid), {
+          email: user.email,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          onboarded: false
+        }, { merge: true });
       }
       if (onLoginSuccess) onLoginSuccess();
     } catch (err: any) {
-      console.error("Auth error:", err);
+      // Avoid logging common user errors as full errors to reduce console noise
+      const commonUserErrors = ['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential', 'auth/email-already-in-use'];
+      if (!commonUserErrors.includes(err.code)) {
+        console.error("Auth error:", err);
+      }
+      
       let message = "Une erreur est survenue.";
       
       if (err.code === 'auth/user-not-found') {
@@ -108,16 +131,83 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
       }
 
       if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        message = "Email ou mot de passe incorrect.";
+        if (isLogin) {
+          setError(
+            <div className="space-y-1.5 flex flex-col">
+              <p className="font-black uppercase text-[10px]">Identifiants incorrects</p>
+              <p className="opacity-70">L'email ou le mot de passe ne correspond à aucun compte.</p>
+              <div className="flex gap-4 mt-2">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setIsLogin(false);
+                    setError(null);
+                    setPassword('');
+                  }}
+                  className="text-[8px] underline decoration-indigo-300 underline-offset-4 hover:text-indigo-600 transition-colors uppercase font-black"
+                >
+                  Créer un compte
+                </button>
+                <button 
+                  type="button"
+                  onClick={handleResetPassword}
+                  className="text-[8px] underline decoration-indigo-300 underline-offset-4 hover:text-indigo-600 transition-colors uppercase font-black"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
+            </div>
+          );
+        } else {
+          setError("Format d'identifiants non supporté.");
+        }
+        setLoading(false);
+        return;
       } else if (err.code === 'auth/email-already-in-use') {
-        message = "Cet email est déjà enregistré. Veuillez vous connecter.";
+        setError(
+          <div className="space-y-1.5 flex flex-col">
+            <p>Cet email est déjà enregistré.</p>
+            <button 
+              type="button"
+              onClick={() => {
+                setIsLogin(true);
+                setError(null);
+                // Clear password to let user enter their actual password for login
+                setPassword('');
+              }}
+              className="w-fit text-[8px] underline decoration-indigo-300 underline-offset-4 hover:text-indigo-600 transition-colors uppercase font-black"
+            >
+              Se connecter au compte existant
+            </button>
+          </div>
+        );
         setIsLogin(true);
+        setLoading(false);
+        return;
       } else if (err.code === 'auth/weak-password') {
         message = "Le mot de passe doit contenir au moins 6 caractères.";
       } else if (err.code === 'auth/invalid-email') {
         message = "Format d'email invalide.";
       } else if (err.code === 'auth/network-request-failed') {
-        message = "Erreur réseau. Vérifiez votre connexion.";
+        setError(
+          <div className="space-y-1.5 flex flex-col">
+            <p className="font-black uppercase text-[10px]">Erreur réseau</p>
+            <p className="opacity-70 text-[9px] leading-relaxed">
+              Impossible de contacter les serveurs Firebase. 
+              Vérifiez votre connexion ou désactivez vos éventuels adblockers / extensions qui pourraient bloquer les requêtes Google.
+              Si vous êtes en navigation privée, assurez-vous que les cookies tiers sont autorisés.
+            </p>
+            <button 
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-2 text-[8px] underline decoration-indigo-300 underline-offset-4 hover:text-indigo-600 transition-colors uppercase font-black"
+            >
+              Recharger la page
+            </button>
+          </div>
+        );
+        setLoading(false);
+        return;
       } else if (err.code === 'auth/too-many-requests') {
         message = "Trop de tentatives. Veuillez réessayer plus tard.";
       }
@@ -131,11 +221,42 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
     setLoading(true);
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // Check if user document exists, if not initialize it
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+          email: user.email,
+          userName: user.displayName || '',
+          profileImage: user.photoURL || '',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          onboarded: false
+        }, { merge: true });
+      }
+      
       if (onLoginSuccess) onLoginSuccess();
     } catch (err: any) {
-      console.error("Google Auth error:", err);
-      setError("Erreur lors de la connexion avec Google.");
+      if (err.code === 'auth/account-exists-with-different-credential') {
+        setError("Un compte existe déjà avec cet email via une autre méthode de connexion (Email/Mot de passe).");
+      } else if (err.code === 'auth/network-request-failed') {
+        setError(
+          <div className="space-y-1.5 flex flex-col">
+            <p className="font-black uppercase text-[10px]">Erreur réseau (Google)</p>
+            <p className="opacity-70 text-[9px] leading-relaxed">
+              La connexion Google a échoué à cause d'un blocage réseau. 
+              Vérifiez votre connexion ou désactivez les extensions qui bloquent les fenêtres surgissantes (popups) ou les scripts tiers.
+            </p>
+          </div>
+        );
+      } else if (err.code !== 'auth/popup-closed-by-user') {
+        console.error("Google Auth error:", err);
+        setError("Erreur lors de la connexion avec Google.");
+      }
     } finally {
       setLoading(false);
     }
@@ -278,9 +399,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
               GOOGLE
             </button>
             <button 
+              onClick={handleAppleLogin}
               className="flex items-center justify-center gap-3 py-4 bg-white border border-slate-100/50 rounded-[20px] neumorphic-shadow hover:neumorphic-shadow-hover transition-all font-black text-[10px] uppercase tracking-widest text-[#0F172A]"
             >
-              <Apple size={18} className="text-black" />
+              <svg className="w-4 h-4" viewBox="0 0 384 512" fill="currentColor">
+                <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
+              </svg>
               APPLE
             </button>
           </motion.div>
@@ -304,7 +428,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                         type="email" 
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="nom@entreprise.fr"
+                        placeholder="votre@email.fr"
                         required
                         className="w-full bg-[#FCFDFF] border border-slate-100 rounded-[14px] p-4 pl-12 text-[#0F172A] text-xs font-bold focus:bg-white focus:border-indigo-100 outline-none transition-all placeholder:text-slate-200"
                       />
@@ -349,10 +473,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                   <motion.div 
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="flex items-center gap-3 p-3.5 rounded-xl bg-rose-50 border border-rose-100 text-rose-500"
+                    className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-50 border border-rose-100 text-rose-500"
                   >
-                    <AlertCircle size={18} className="shrink-0" />
-                    <p className="text-[9px] font-black uppercase tracking-wider">{error}</p>
+                    <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                    <div className="text-[9px] font-black uppercase tracking-wider leading-relaxed">
+                      {error}
+                    </div>
                   </motion.div>
                 )}
 
@@ -370,23 +496,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                 <div className="grid grid-cols-2 gap-4">
                   {/* Primary Capsule Button */}
                   <button 
-  type="submit" 
-  disabled={loading}
-  className="group relative flex items-center justify-center px-4 py-4 bg-[#0F172A] text-white font-black uppercase tracking-tight rounded-full shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 w-full min-w-max"
->
-  <div className="flex items-center justify-center gap-1 w-full">
-    <span className="text-[9px] sm:text-[10px] whitespace-nowrap leading-none">
-      {loading ? (
-        <Loader2 className="animate-spin" size={14} />
-      ) : (
-        isLogin ? 'SE CONNECTER' : "S'INSCRIRE"
-      )}
-    </span>
-    {!loading && (
-      <ChevronRight size={14} className="flex-shrink-0 text-white/40 group-hover:text-white transition-all" />
-    )}
-  </div>
-</button>
+                    type="submit" 
+                    disabled={loading}
+                    className="group relative flex items-center justify-center gap-2 px-6 py-4 bg-[#0F172A] text-white font-black uppercase tracking-[0.15em] rounded-full shadow-[0_12px_24px_-8px_rgba(15,23,42,0.4)] hover:shadow-[0_16px_32px_-8px_rgba(15,23,42,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all text-[10px] disabled:opacity-50 overflow-hidden"
+                  >
+                    <span className="text-center">
+                      {loading ? <Loader2 className="animate-spin" size={16} /> : (isLogin ? 'SE CONNECTER' : "S'INSCRIRE")}
+                    </span>
+                    <ChevronRight size={14} className="text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                  </button>
 
                   {/* Secondary Capsule Button */}
                   <button 
@@ -400,6 +518,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                     <span className="text-center">
                       {isLogin ? "S'INSCRIRE" : "CONNEXION"}
                     </span>
+                    {isLogin && <ChevronRight size={14} className="text-[#0F172A]/40 group-hover:text-[#0F172A] group-hover:translate-x-0.5 transition-all" />}
                   </button>
                 </div>
               </form>

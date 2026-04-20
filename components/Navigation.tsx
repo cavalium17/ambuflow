@@ -1,6 +1,8 @@
 
 import React from 'react';
-import { Clock, Calendar, Wallet, User } from 'lucide-react';
+import { Clock, Calendar, Wallet, User, LogOut } from 'lucide-react';
+import { auth } from '../src/firebaseConfig';
+import { signOut } from 'firebase/auth';
 import { AppTab } from '../types';
 
 interface NavigationProps {
@@ -17,6 +19,16 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMo
     { id: 'paie', icon: Wallet, label: 'Revenus', disabled: isGuest },
     { id: 'profile', icon: User, label: 'Profil' },
   ];
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Local cleanups if needed
+      localStorage.removeItem('ambuflow_is_guest');
+    } catch (error) {
+      console.error("Erreur lors de la déconnexion:", error);
+    }
+  };
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-50 pointer-events-none">
@@ -53,6 +65,23 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMo
             </button>
           );
         })}
+
+        {/* Bouton de Déconnexion */}
+        {!isGuest && (
+          <button
+            onClick={handleLogout}
+            className="flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-300 outline-none text-rose-500 hover:text-rose-400 group"
+          >
+            <LogOut 
+              size={20} 
+              strokeWidth={2}
+              className="group-hover:-translate-x-0.5 transition-transform"
+            />
+            <span className="text-[9px] uppercase tracking-widest font-bold opacity-60">
+              Quitter
+            </span>
+          </button>
+        )}
       </nav>
     </div>
   );

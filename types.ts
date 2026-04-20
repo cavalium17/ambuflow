@@ -61,6 +61,7 @@ export interface UserProfile {
   modulationWeeks?: number;
   modulationStartDate?: string;
   payRateMode: '100_percent' | '90_percent';
+  supplementaryTaskType?: 'none' | 'type_1' | 'type_2' | 'type_3';
 }
 
 export interface Badge {

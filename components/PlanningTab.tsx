@@ -50,6 +50,8 @@ interface PlanningTabProps {
   leaveBalances: { cp: number };
   initialCpBalance: number;
   setInitialCpBalance: (val: number) => void;
+  weekendDays: string[];
+  setWeekendDays: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 type ViewType = 'week' | 'month';
@@ -73,7 +75,9 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   contractStartDate,
   leaveBalances,
   initialCpBalance,
-  setInitialCpBalance
+  setInitialCpBalance,
+  weekendDays,
+  setWeekendDays
 }) => {
   const [viewType, setViewType] = useState<ViewType>('week');
   const [pivotDate, setPivotDate] = useState(new Date(appCurrentTime));
@@ -84,6 +88,44 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   };
+
+  const getFrenchPublicHolidays = useCallback((year: number) => {
+    const holidays = [
+      `${year}-01-01`, // Nouvel An
+      `${year}-05-01`, // Fête du Travail
+      `${year}-05-08`, // Victoire 1945
+      `${year}-07-14`, // Fête Nationale
+      `${year}-08-15`, // Assomption
+      `${year}-11-01`, // Toussaint
+      `${year}-11-11`, // Armistice
+      `${year}-12-25`, // Noël
+    ];
+
+    const a = year % 19, b = Math.floor(year / 100), c = year % 100,
+          d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+          g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
+          i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7,
+          m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const n = h + l - 7 * m + 114;
+    const month = Math.floor(n / 31);
+    const day = (n % 31) + 1;
+
+    const easter = new Date(year, month - 1, day);
+    const addDays = (date: Date, days: number) => {
+      const d = new Date(date);
+      d.setDate(d.getDate() + days);
+      const yStr = d.getFullYear();
+      const mStr = String(d.getMonth() + 1).padStart(2, '0');
+      const dStr = String(d.getDate()).padStart(2, '0');
+      return `${yStr}-${mStr}-${dStr}`;
+    };
+
+    holidays.push(addDays(easter, 1)); // Lundi de Pâques
+    holidays.push(addDays(easter, 39)); // Ascension
+    holidays.push(addDays(easter, 50)); // Lundi de Pentecôte
+
+    return holidays;
+  }, []);
 
   const todayStr = useMemo(() => getLocalDateString(appCurrentTime), [appCurrentTime]);
 
@@ -147,14 +189,34 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     
     let count = 0;
     const curDate = new Date(startDate);
+    const yearHolidays: Record<number, string[]> = {};
+
     while (curDate <= endDateObj) {
+      const dStr = getLocalDateString(curDate);
+      const year = curDate.getFullYear();
+      if (!yearHolidays[year]) {
+        yearHolidays[year] = getFrenchPublicHolidays(year);
+      }
+      
+      const isHoliday = yearHolidays[year].includes(dStr);
+      const isUserWeekend = weekendDays.includes(dStr);
       const dayOfWeek = curDate.getDay();
-      if (cpCalculationMode === '30') {
+
+      let shouldExclude = false;
+      if (isHoliday) {
+        shouldExclude = true;
+      } else if (isUserWeekend) {
+        shouldExclude = true;
+      } else if (cpCalculationMode === '30') {
         // Mode 30j ouvrables : on exclut uniquement les dimanches
-        if (dayOfWeek !== 0) count++;
+        if (dayOfWeek === 0) shouldExclude = true;
       } else {
         // Mode 25j ouvrés : on exclut samedis et dimanches
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+        if (dayOfWeek === 0 || dayOfWeek === 6) shouldExclude = true;
+      }
+
+      if (!shouldExclude) {
+        count++;
       }
       curDate.setDate(curDate.getDate() + 1);
     }
@@ -347,7 +409,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
 
   const validateShift = () => {
     if (!newShift.day || !newShift.start) return;
-    const isPast = newShift.day < todayStr;
+    const isPast = isNewShiftPast;
     const shiftId = Math.random().toString(36).substr(2, 9);
     
     const shiftData: Shift = { 
@@ -377,14 +439,26 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     
     const newShifts: Shift[] = [];
     const curDate = new Date(startDate);
+    const yearHolidays: Record<number, string[]> = {};
     
     while (curDate <= endDate) {
+      const dStr = getLocalDateString(curDate);
+      const year = curDate.getFullYear();
+      if (!yearHolidays[year]) {
+        yearHolidays[year] = getFrenchPublicHolidays(year);
+      }
+
+      const isHoliday = yearHolidays[year].includes(dStr);
+      const isUserWeekend = weekendDays.includes(dStr);
       const dayOfWeek = curDate.getDay();
+
       let isBusinessDay = false;
-      if (cpCalculationMode === '30') {
-        isBusinessDay = dayOfWeek !== 0;
-      } else {
-        isBusinessDay = dayOfWeek !== 0 && dayOfWeek !== 6;
+      if (!isHoliday && !isUserWeekend) {
+        if (cpCalculationMode === '30') {
+          isBusinessDay = dayOfWeek !== 0;
+        } else {
+          isBusinessDay = dayOfWeek !== 0 && dayOfWeek !== 6;
+        }
       }
 
       if (isBusinessDay) {
@@ -453,6 +527,14 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     return `${h}H ${m}M`;
   };
   
+  const toggleWeekend = (dateStr: string) => {
+    setWeekendDays(prev => 
+      prev.includes(dateStr) 
+        ? prev.filter(d => d !== dateStr) 
+        : [...prev, dateStr]
+    );
+  };
+
   const bentoCardBase = (active: boolean = false) => `relative overflow-hidden transition-all duration-300 rounded-[32px] border ${darkMode ? (active ? 'bg-[#15192D] border-white/10 shadow-2xl' : 'bg-[#0F1221] border-white/5') : (active ? 'bg-white border-slate-200 shadow-xl shadow-slate-200/50' : 'bg-slate-50 border-slate-200 shadow-sm')}`;
 
   const renderShiftItem = (shift: Shift) => {
@@ -474,15 +556,15 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                   <span className="text-xl font-black text-orange-500 tracking-tight leading-none uppercase truncate">{shift.leaveType || 'CONGÉ'}</span>
                 ) : (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums leading-none">{shift.start}</span>
-                    <span className="text-slate-400 dark:text-slate-600 font-bold">—</span>
-                    <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums leading-none">{shift.end === '--:--' ? <span className="text-slate-400 animate-pulse">...</span> : shift.end}</span>
+                    <span className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-slate-900'} tracking-tight tabular-nums leading-none`}>{shift.start}</span>
+                    <span className={`font-bold ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>—</span>
+                    <span className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-slate-900'} tracking-tight tabular-nums leading-none`}>{shift.end === '--:--' ? <span className="text-slate-400 animate-pulse">...</span> : shift.end}</span>
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-1.5 mt-2">
                 <span className={`${isLeave ? 'text-orange-400' : 'text-[#FF4B5C]'} text-[10px] font-black uppercase tracking-[0.1em]`}>{isLeave ? 'ABSENCE' : config.label}</span>
-                <span className="text-slate-300 dark:text-slate-800 text-[10px]">•</span>
+                <span className={`${darkMode ? 'text-slate-800' : 'text-slate-300'} text-[10px]`}>•</span>
                 <div className={`flex items-center gap-1.5 ${isLeave ? 'text-orange-400' : 'text-emerald-500'} font-black text-[10px] uppercase tracking-[0.1em]`}>
                   <span>{duration}</span>
                   {isCompleted && !isLeave && <Check size={10} strokeWidth={4} />}
@@ -565,7 +647,13 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     return days;
   }, [pivotDate]);
 
-  const isNewShiftPast = useMemo(() => newShift.day && newShift.day < todayStr, [newShift.day, todayStr]);
+  const isNewShiftPast = useMemo(() => {
+    if (!newShift.day) return false;
+    if (newShift.day < todayStr) return true;
+    // Condition: past 6 AM on today's date
+    if (newShift.day === todayStr && appCurrentTime.getHours() >= 6) return true;
+    return false;
+  }, [newShift.day, todayStr, appCurrentTime]);
 
   return (
     <div className="p-4 space-y-6 animate-fadeIn pb-40">
@@ -624,7 +712,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                    </div>
                    {isToday && <div className="bg-indigo-600 px-4 py-1.5 rounded-full shadow-lg border border-white/10"><span className="text-[9px] font-black text-white uppercase tracking-widest">AUJOURD'HUI</span></div>}
                 </div>
-                {ds.length > 0 ? (<div className="space-y-3">{ds.map(s => renderShiftItem(s))}</div>) : (<div className="py-8 border-2 border-dashed border-slate-500/5 dark:border-white/5 rounded-3xl text-center opacity-30"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Repos</p></div>)}
+                {ds.length > 0 ? (<div className="space-y-3">{ds.map(s => renderShiftItem(s))}</div>) : (<div className={`py-8 border-2 border-dashed ${darkMode ? 'border-white/5' : 'border-slate-500/5'} rounded-3xl text-center opacity-30`}><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Repos</p></div>)}
               </div>
             );
           })}
@@ -643,6 +731,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                 const isToday = dStr === todayStr;
                 const isSelected = dStr === selectedDay;
                 const isModulationEnd = dStr === modulationEndDateStr;
+                const isWeekend = weekendDays.includes(dStr);
                 const dayShifts = getDayShifts(dStr);
                 const hasShifts = dayShifts.length > 0;
                 const hasCP = dayShifts.some(s => s.isLeave && (s.leaveType === 'CP' || s.leaveType === 'Congés Payés' || s.leaveType === 'Congé' || s.vehicle === 'CONGÉ'));
@@ -658,18 +747,20 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                         : hasCP
                           ? 'bg-orange-500 text-white shadow-md'
                           : isToday 
-                            ? 'text-indigo-600 ring-2 ring-indigo-500/20' 
+                            ? 'text-indigo-600 ring-2 ring-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.2)]' 
                             : isModulationEnd
                               ? 'bg-amber-500/10 text-amber-500 ring-2 ring-amber-500/30'
                               : hasWork 
                                 ? (darkMode ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') 
-                                : 'text-slate-400 hover:bg-slate-500/5'
+                                : isWeekend
+                                  ? (darkMode ? 'bg-slate-800/40 text-slate-400 border border-white/5' : 'bg-slate-100 text-slate-500 border border-slate-200')
+                                  : 'text-slate-400 hover:bg-slate-500/5'
                     }`}
                   >
                     {day.getDate()}
                     {isModulationEnd && (
                       <div className="absolute -top-1 -right-1">
-                        <div className="w-3 h-3 bg-amber-500 rounded-full flex items-center justify-center border-2 border-white dark:border-[#0F1221]">
+                        <div className={`w-3 h-3 bg-amber-500 rounded-full flex items-center justify-center border-2 ${darkMode ? 'border-[#0F1221]' : 'border-white'}`}>
                           <AlertTriangle size={6} className="text-white" />
                         </div>
                       </div>
@@ -688,11 +779,33 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
             </div>
           </div>
           <div className="space-y-4">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 px-1">{selectedDay === todayStr ? "AUJOURD'HUI" : new Date(selectedDay).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</h4>
+            <div className="flex justify-between items-center px-1">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{selectedDay === todayStr ? "AUJOURD'HUI" : new Date(selectedDay).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</h4>
+              <button 
+                onClick={() => toggleWeekend(selectedDay)}
+                className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border ${
+                  weekendDays.includes(selectedDay)
+                    ? (darkMode ? 'bg-slate-800 border-white/10 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600 shadow-sm')
+                    : (darkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20' : 'bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100 shadow-sm')
+                }`}
+              >
+                {weekendDays.includes(selectedDay) ? (
+                  <>
+                    <Calendar size={12} />
+                    <span>Retirer Week-end</span>
+                  </>
+                ) : (
+                  <>
+                    <CalendarIcon size={12} />
+                    <span>Marquer Week-end</span>
+                  </>
+                )}
+              </button>
+            </div>
             {getDayShifts(selectedDay).length > 0 ? (
               <div className="space-y-3 animate-slideUp">{getDayShifts(selectedDay).map(s => renderShiftItem(s))}</div>
             ) : (
-              <div className="p-12 rounded-[32px] border-2 border-dashed border-slate-500/5 dark:border-white/5 flex flex-col items-center justify-center text-center opacity-30">
+              <div className={`p-12 rounded-[32px] border-2 border-dashed ${darkMode ? 'border-white/5' : 'border-slate-500/5'} flex flex-col items-center justify-center text-center opacity-30`}>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aucune mission</p>
               </div>
             )}
@@ -1019,16 +1132,16 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-indigo-500 font-black uppercase text-[9px] tracking-widest px-1">Début</label>
-                    <input type="time" className="w-full p-4 rounded-2xl bg-slate-500/5 dark:bg-[#0F1221] font-black border border-white/5 outline-none focus:border-indigo-500" value={editingShift.start} onChange={e => setEditingShift({...editingShift, start: e.target.value})} />
+                    <input type="time" className={`w-full p-4 rounded-2xl ${darkMode ? 'bg-[#0F1221] text-white' : 'bg-slate-500/5 text-slate-900'} font-black border border-white/5 outline-none focus:border-indigo-500`} value={editingShift.start} onChange={e => setEditingShift({...editingShift, start: e.target.value})} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-indigo-500 font-black uppercase text-[9px] tracking-widest px-1">Fin</label>
-                    <input type="time" className="w-full p-4 rounded-2xl bg-slate-500/5 dark:bg-[#0F1221] font-black border border-white/5 outline-none focus:border-indigo-500" value={editingShift.end} onChange={e => setEditingShift({...editingShift, end: e.target.value})} />
+                    <input type="time" className={`w-full p-4 rounded-2xl ${darkMode ? 'bg-[#0F1221] text-white' : 'bg-slate-500/5 text-slate-900'} font-black border border-white/5 outline-none focus:border-indigo-500`} value={editingShift.end} onChange={e => setEditingShift({...editingShift, end: e.target.value})} />
                   </div>
                </div>
 
                {/* SECTION PAUSES & COUPURES */}
-               <div className="space-y-4 pt-4 border-t border-slate-500/10 dark:border-white/10">
+               <div className={`space-y-4 pt-4 border-t ${darkMode ? 'border-white/10' : 'border-slate-500/10'}`}>
                   <label className="text-indigo-500 font-black uppercase text-[9px] tracking-widest px-1 block">PAUSES & COUPURES</label>
                   
                   {/* Liste des pauses existantes */}

@@ -42,9 +42,9 @@ service cloud.firestore {
         'afgsuDate', 'medicalExpiryDate', 'cpCalculationMode',
         'modulationStartDate', 'modulationWeeks', 'initialCpBalance',
         'weeklyContractHours', 'overtimeMode', 'payRateMode',
-        'pushEnabled', 'followSystemTheme', 'customHours',
+        'pushEnabled', 'followSystemTheme', 'customHours', 'weekendDays',
         'email', 'createdAt', 'roles', 'primaryRole',
-        'activeShiftId', 'scheduledShiftId'
+        'activeShiftId', 'scheduledShiftId', 'supplementaryTaskType'
       ]) &&
       (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
       (!('firstName' in data) || (data.firstName is string && data.firstName.size() < 100)) &&
