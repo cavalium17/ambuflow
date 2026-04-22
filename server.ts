@@ -2,6 +2,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import { generateRegistrationOptions, generateAuthenticationOptions } from "@simplewebauthn/server";
 
 async function startServer() {
   const app = express();
@@ -10,32 +11,53 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
-  app.get('/api/test', async (req, res) => {
-    try {
-      const module = await import('./api/test.js');
-      return module.default(req, res);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to load test handler' });
-    }
+  app.get('/api/test', (req, res) => {
+    res.json({ message: "Hello from AmbuFlow API" });
   });
 
   app.get('/api/register', async (req, res) => {
     try {
-      const module = await import('./api/register.js');
-      return module.default(req, res);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to load register handler' });
+      const hostHeader = req.headers.host;
+      const host = hostHeader ? hostHeader.split(':')[0] : "localhost";
+      const rpID = host;
+
+      console.log(`Generating registration options for rpID: ${rpID}`);
+
+      const options = await generateRegistrationOptions({
+        rpName: "AmbuFlow",
+        rpID: rpID,
+        userID: "1234",
+        userName: "test@ambuflow.com",
+        attestationType: "none",
+        authenticatorSelection: {
+          residentKey: "required",
+          userVerification: "preferred",
+        },
+      });
+
+      res.status(200).json(options);
+    } catch (error: any) {
+      console.error("API Register Error:", error);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
   });
 
   app.get('/api/login-options', async (req, res) => {
     try {
-      const module = await import('./api/login-options.js');
-      return module.default(req, res);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to load login-options handler' });
+      const hostHeader = req.headers.host;
+      const host = hostHeader ? hostHeader.split(':')[0] : "localhost";
+      const rpID = host;
+
+      const options = await generateAuthenticationOptions({
+        rpID: rpID,
+        allowCredentials: [],
+        userVerification: "preferred",
+      });
+
+      res.status(200).json(options);
+    } catch (error: any) {
+      console.error("API Login Options Error:", error);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
   });
 
