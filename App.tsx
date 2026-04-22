@@ -742,6 +742,7 @@ const App: React.FC = () => {
     if (profile.modulationStartDate !== undefined) setModulationStartDate(profile.modulationStartDate);
     if (profile.payRateMode !== undefined) setPayRateMode(profile.payRateMode);
     if (profile.supplementaryTaskType !== undefined) setSupplementaryTaskType(profile.supplementaryTaskType as any);
+    if (profile.initialCpBalance !== undefined) setInitialCpBalance(profile.initialCpBalance);
     
     setUserName(`${profile.firstName || ''} ${profile.lastName || ''}`.trim());
     
@@ -1621,7 +1622,7 @@ const App: React.FC = () => {
         remainingHours: Math.floor(remainingMin / 60),
         remainingMins: remainingMin % 60,
         countdown: `${daysLeft}j ${hoursLeft}h`,
-        progress: Math.min(100, (totalMin / targetMin) * 100)
+        progress: (totalMin / targetMin) * 100
       };
       title = "Modulation";
       subtitle = `${weeks} semaines`;
@@ -1641,7 +1642,7 @@ const App: React.FC = () => {
     }
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
-    const progress = Math.min(100, (totalMin / targetMin) * 100);
+    const progress = (totalMin / targetMin) * 100;
     return { title, subtitle, icon, value: `${h}h ${m}m`, color, extraData, progress };
   }, [shifts, workRegime, calculateEffectiveMinutes, currentTime, contractStartDate, modulationStartDate, modulationWeeks, hoursBase, status, breakStartDateTime]);
 
@@ -2198,88 +2199,103 @@ const App: React.FC = () => {
              <div className="flex-1 p-6 relative flex flex-col justify-between">
                 {workRegime === 'modulation' && periodStats.extraData ? (
                   carouselIndex === 0 ? (
-                    <div className="flex items-center justify-between animate-fadeIn">
-                       <div className="flex items-center gap-4">
-                          <div className={`p-4 rounded-[24px] bg-indigo-500/10 text-indigo-500`}>
-                             <Hourglass size={28} className="animate-pulse" />
+                    <div className="flex items-center justify-between animate-fadeIn px-2">
+                       <div className="flex items-center gap-5">
+                          <div className={`w-20 h-20 rounded-[32px] ${effectiveDarkMode ? 'bg-indigo-500/10' : 'bg-indigo-50'} flex items-center justify-center text-indigo-500 shadow-inner`}>
+                             <Hourglass size={32} className="animate-pulse" />
                           </div>
-                          <div>
-                             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Fin de Modulation</p>
-                             <p className="text-2xl font-black tracking-tight tabular-nums">{periodStats.extraData.countdown}</p>
-                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest opacity-60">Temps restant</p>
+                          <div className="space-y-0.5">
+                             <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Fin de Modulation</p>
+                             <p className={`text-4xl font-black tracking-tighter tabular-nums ${effectiveDarkMode ? 'text-white' : 'text-slate-900'}`}>{periodStats.extraData.countdown}</p>
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60">Temps restant</p>
                           </div>
                        </div>
-                       <button onClick={() => setCarouselIndex(1)} className="p-3 bg-slate-500/5 rounded-2xl hover:bg-slate-500/10 transition-colors">
-                          <ChevronRight size={20} className="text-slate-400" />
+                       <button onClick={() => setCarouselIndex(1)} className={`p-4 rounded-3xl ${effectiveDarkMode ? 'bg-white/5' : 'bg-slate-100'} hover:scale-105 transition-all`}>
+                          <ChevronRight size={24} className="text-slate-400" />
                        </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between animate-fadeIn">
-                       <div className="flex items-center gap-4">
-                          <div className={`p-4 rounded-[24px] bg-emerald-500/10 text-emerald-500`}>
-                             <PieChart size={28} />
+                    <div className="flex items-center justify-between animate-fadeIn px-2">
+                       <div className="flex items-center gap-5">
+                          <div className={`w-20 h-20 rounded-[32px] ${effectiveDarkMode ? 'bg-emerald-500/10' : 'bg-emerald-50'} flex items-center justify-center text-emerald-500 shadow-inner`}>
+                             <PieChart size={32} />
                           </div>
-                          <div className="space-y-1">
+                          <div className="space-y-2">
                              <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Contrat: {periodStats.extraData.targetHours}h</span>
                              </div>
-                             <div className="flex gap-4">
+                             <div className="flex gap-5">
                                 <div>
-                                   <p className="text-xl font-black tracking-tight">{periodStats.extraData.performedHours}h {periodStats.extraData.performedMins}m</p>
-                                   <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">EFFECTUÉ</p>
+                                   <p className={`text-2xl font-black tracking-tighter ${effectiveDarkMode ? 'text-white' : 'text-slate-900'}`}>{periodStats.extraData.performedHours}h {periodStats.extraData.performedMins}m</p>
+                                   <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">EFFECTUÉ</p>
                                 </div>
-                                <div className="w-px h-6 bg-slate-500/10 self-center" />
+                                <div className="w-px h-8 bg-slate-500/10 self-center" />
                                 <div>
-                                   <p className="text-xl font-black tracking-tight text-slate-400">{periodStats.extraData.remainingHours}h {periodStats.extraData.remainingMins}m</p>
-                                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">RESTE</p>
+                                   <p className="text-2xl font-black tracking-tighter text-slate-400">{periodStats.extraData.remainingHours}h {periodStats.extraData.remainingMins}m</p>
+                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">RESTE</p>
                                 </div>
                              </div>
                           </div>
                        </div>
-                       <button onClick={() => setCarouselIndex(0)} className="p-3 bg-slate-500/5 rounded-2xl hover:bg-slate-500/10 transition-colors">
-                          <ChevronLeft size={20} className="text-slate-400" />
+                       <button onClick={() => setCarouselIndex(0)} className={`p-4 rounded-3xl ${effectiveDarkMode ? 'bg-white/5' : 'bg-slate-100'} hover:scale-105 transition-all`}>
+                          <ChevronLeft size={24} className="text-slate-400" />
                        </button>
                     </div>
                   )
                 ) : (
-                  <div className="flex items-center justify-between animate-fadeIn">
-                     <div className="flex items-center gap-4">
-                        <div className={`p-4 rounded-[24px] bg-${periodStats.color}-500/10 text-${periodStats.color}-500`}>
-                           <PeriodIcon size={28} />
+                  <div className="flex items-center justify-between animate-fadeIn px-2">
+                     <div className="flex items-center gap-5">
+                        <div className={`w-20 h-20 rounded-[32px] ${effectiveDarkMode ? `bg-${periodStats.color}-500/10` : `bg-${periodStats.color}-50`} flex items-center justify-center text-${periodStats.color}-500 shadow-inner`}>
+                           <PeriodIcon size={32} />
                         </div>
-                        <div>
-                           <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-0.5">{periodStats.title}</p>
-                           <p className="text-2xl font-black tracking-tight">{periodStats.value}</p>
-                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest opacity-60">{periodStats.subtitle}</p>
+                        <div className="space-y-0.5">
+                           <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">{periodStats.title}</p>
+                           <p className={`text-4xl font-black tracking-tighter ${effectiveDarkMode ? 'text-white' : 'text-slate-900'}`}>{periodStats.value}</p>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60">{periodStats.subtitle}</p>
                         </div>
                      </div>
-                     <button onClick={() => setActiveTab('paie')} className="p-3 bg-slate-500/5 rounded-2xl hover:bg-slate-500/10 transition-colors">
-                        <ChevronRight size={20} className="text-slate-400" />
+                     <button onClick={() => setActiveTab('paie')} className={`p-4 rounded-3xl ${effectiveDarkMode ? 'bg-white/5' : 'bg-slate-100'} hover:scale-105 transition-all`}>
+                        <ChevronRight size={24} className="text-slate-400" />
                      </button>
                   </div>
                 )}
-                <div className="mt-6 space-y-2">
-                   <div className="relative h-2 w-full bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
-                      <div className="absolute inset-0 flex justify-between px-1 pointer-events-none">
-                         {[...Array(7)].map((_, i) => (
-                            <div key={i} className="h-full w-px bg-black/10 dark:bg-white/10" />
-                         ))}
-                      </div>
-                      <div className={`h-full bg-${periodStats.color}-500 transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(99,102,241,0.3)]`} style={{ width: `${periodStats.progress}%` }} />
+                
+                <div className="mt-8 space-y-4">
+                   <div className="relative h-2 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(99,102,241,0.2)] ${
+                          periodStats.progress > 120 ? 'bg-rose-600' :
+                          periodStats.progress > 110 ? 'bg-rose-500' :
+                          periodStats.progress > 100 ? 'bg-orange-500' :
+                          `bg-${periodStats.color}-500`
+                        }`} 
+                        style={{ width: `${Math.min(100, periodStats.progress)}%` }} 
+                      />
                    </div>
                    <div className="flex justify-between items-center px-1">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Début</span>
-                      <span className={`text-[8px] font-black uppercase tracking-widest text-${periodStats.color}-500`}>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em]">Début</span>
+                      <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${
+                        periodStats.progress > 120 ? 'text-rose-600' :
+                        periodStats.progress > 110 ? 'text-rose-500' :
+                        periodStats.progress > 100 ? 'text-orange-500' :
+                        effectiveDarkMode ? 'text-emerald-400' : 'text-emerald-600'
+                      }`}>
                         {periodStats.progress.toFixed(0)}% de l'objectif
                       </span>
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Objectif</span>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em]">Objectif</span>
                    </div>
                 </div>
              </div>
              {workRegime === 'modulation' && (
-                <div className="pb-4 flex justify-center gap-2">
-                   <div className={`w-1.5 h-1.5 rounded-full transition-all ${carouselIndex === 0 ? 'bg-indigo-500 w-4' : 'bg-slate-500/30'}`} />
-                   <div className={`w-1.5 h-1.5 rounded-full transition-all ${carouselIndex === 1 ? 'bg-emerald-500 w-4' : 'bg-slate-500/30'}`} />
+                <div className="pb-6 flex justify-center gap-2.5">
+                   <button 
+                     onClick={() => setCarouselIndex(0)}
+                     className={`h-2 rounded-full transition-all duration-500 ${carouselIndex === 0 ? 'bg-indigo-500 w-8' : 'bg-slate-500/20 w-2'}`} 
+                   />
+                   <button 
+                     onClick={() => setCarouselIndex(1)}
+                     className={`h-2 rounded-full transition-all duration-500 ${carouselIndex === 1 ? 'bg-emerald-500 w-8' : 'bg-slate-500/20 w-2'}`} 
+                   />
                 </div>
              )}
           </div>

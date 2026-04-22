@@ -39,6 +39,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [payRateMode, setPayRateMode] = useState<'100_percent' | '90_percent'>('100_percent');
   const [contractStartDate, setContractStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [supplementaryTaskType, setSupplementaryTaskType] = useState<'none' | 'type_1' | 'type_2' | 'type_3'>('none');
+  const [initialCpBalance, setInitialCpBalance] = useState(25);
   const [autoGeo, setAutoGeo] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(true);
 
@@ -83,6 +84,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       payRateMode,
       contractStartDate,
       supplementaryTaskType,
+      initialCpBalance,
       autoGeo,
       pushEnabled
     });
@@ -422,6 +424,39 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                       {overtimeMode === 'modulation' && "Le mode de modulation permet de lisser vos heures sur plusieurs semaines."}
                       {overtimeMode === 'annualized' && "Calcul basé sur le total d'heures annuel (1607h)."}
                     </p>
+                  </div>
+
+                  {/* Congés Payés Restants */}
+                  <div className="space-y-4 pt-4">
+                    <div className="flex justify-between items-center ml-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Congés payés restants</label>
+                      <span className="text-indigo-600 font-black text-2xl">{initialCpBalance}j</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-3">
+                      {[15, 20, 25, 30].map(val => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setInitialCpBalance(val)}
+                          className={`py-4 rounded-xl font-black text-xs transition-all border-[1.5px] ${
+                            initialCpBalance === val ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20' : 'bg-white text-slate-600 border-slate-100'
+                          }`}
+                        >
+                          {val}j
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type="number"
+                        placeholder="Autre nombre de jours"
+                        value={![15, 20, 25, 30].includes(initialCpBalance) ? initialCpBalance : ''}
+                        onChange={(e) => setInitialCpBalance(Number(e.target.value))}
+                        className={`w-full py-4 rounded-xl font-black text-xs text-center outline-none transition-all border-[1.5px] placeholder:text-slate-300 ${
+                          ![15, 20, 25, 30].includes(initialCpBalance) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-100'
+                        }`}
+                      />
+                    </div>
                   </div>
 
                   {overtimeMode === 'modulation' && (

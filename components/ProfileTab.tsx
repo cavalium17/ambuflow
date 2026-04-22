@@ -620,6 +620,23 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               </div>
             </div>
 
+            {/* Congés Payés Restants */}
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-500/5 border border-white/5">
+              <div className="flex items-center gap-3">
+                <CalendarIcon size={16} className="text-orange-500" />
+                <span className="text-xs font-black uppercase tracking-widest text-slate-400">Congés payés restants</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number"
+                  value={initialCpBalance}
+                  onChange={(e) => setInitialCpBalance(Number(e.target.value))}
+                  className={`bg-transparent text-sm font-black text-right w-12 outline-none focus:text-indigo-500 transition-colors ${darkMode ? 'text-white' : 'text-slate-900'}`}
+                />
+                <span className="text-xs font-bold text-slate-500">j</span>
+              </div>
+            </div>
+
             {/* Missions Complémentaires */}
             <div className="flex flex-col gap-3 p-4 rounded-2xl bg-slate-500/5 border border-white/5">
               <div className="flex items-center justify-between">
