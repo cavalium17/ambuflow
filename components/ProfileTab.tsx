@@ -107,7 +107,7 @@ interface ProfileTabProps {
   setSupplementaryTaskType?: (val: 'none' | 'type_1' | 'type_2' | 'type_3') => void;
 }
 
-const ProfileTab: React.FC<ProfileTabProps> = ({
+export default function ProfileTab({
   darkMode,
   userName,
   userEmail,
@@ -170,7 +170,31 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   taxiCardExpiryDate = "",
   supplementaryTaskType = 'none',
   setSupplementaryTaskType
-}) => {
+}: ProfileTabProps) {
+  // --- LA FONCTION DOIT ÊTRE ICI (DANS LE COMPOSANT) ---
+  const handleCreatePasskey = async () => {
+    try {
+      const resp = await fetch('/api/register');
+      if (!resp.ok) throw new Error('Erreur lors de la récupération des options');
+      const options = await resp.json();
+
+      // startRegistration est bien importé en haut du fichier
+      const regResp = await startRegistration(options);
+
+      console.log("Passkey créée avec succès !", regResp);
+      setIsPasskeyEnabled(true);
+      alert("Passkey enregistrée sur cet appareil !");
+      
+    } catch (error: any) {
+      console.error("Erreur Passkey:", error);
+      if (error.name === 'NotAllowedError') {
+        // L'utilisateur a simplement fermé la fenêtre
+      } else {
+        alert("L'enregistrement a échoué : " + error.message);
+      }
+    }
+  };
+
   const [isResetting, setIsResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
@@ -222,37 +246,6 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 
   const seniorityText = seniorityInfo?.text || "N/A";
   const seniorityBonus = seniorityInfo?.bonus ? `+${(seniorityInfo.bonus * 100).toFixed(0)}%` : "+0%";
-
-  const handleCreatePasskey = async () => {
-    if (!window.PublicKeyCredential) return;
-    
-    setPasskeyLoading(true);
-
-    try {
-      // 1. Demander les options au serveur (ton API qui affiche le JSON)
-      const resp = await fetch('/api/register');
-      if (!resp.ok) throw new Error('Erreur serveur');
-      const options = await resp.json();
-
-      // 2. Lancer la fenêtre biométrique système
-      const regResp = await startRegistration(options);
-
-      // 3. Si on arrive ici, c'est que l'utilisateur a scanné son doigt/visage !
-      console.log("Succès biométrique :", regResp);
-      setIsPasskeyEnabled(true);
-      alert("Passkey configurée avec succès sur cet appareil !");
-      
-    } catch (error: any) {
-      // Si l'utilisateur annule ou si le navigateur n'est pas compatible
-      if (error.name === 'NotAllowedError') {
-        console.log("L'utilisateur a annulé");
-      } else {
-        alert("Erreur : " + error.message);
-      }
-    } finally {
-      setPasskeyLoading(false);
-    }
-  };
 
   const handlePasskeyToggle = () => {
     if (!isPasskeyEnabled) {
@@ -860,6 +853,4 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       </div>
     </div>
   );
-};
-
-export default ProfileTab;
+}

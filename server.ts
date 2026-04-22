@@ -10,6 +10,12 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Set Permissions-Policy for WebAuthn
+  app.use((req, res, next) => {
+    res.setHeader('Permissions-Policy', 'publickey-credentials-create=*, publickey-credentials-get=*');
+    next();
+  });
+
   // API Routes
   app.get('/api/test', (req, res) => {
     res.json({ message: "Hello from AmbuFlow API" });
@@ -26,7 +32,7 @@ async function startServer() {
       const options = await generateRegistrationOptions({
         rpName: "AmbuFlow",
         rpID: rpID,
-        userID: "1234",
+        userID: Buffer.from("1234"),
         userName: "test@ambuflow.com",
         attestationType: "none",
         authenticatorSelection: {
