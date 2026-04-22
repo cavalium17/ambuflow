@@ -59,6 +59,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     'Activation'
   ];
 
+  const getDisplayStep = (currentStep: number) => {
+    if (currentStep === 0) return "";
+    let stepNum = currentStep;
+    if (roles.length <= 1 && currentStep >= 4) {
+      stepNum = currentStep - 1;
+    }
+    return String(stepNum).padStart(2, '0');
+  };
+
   const nextStep = () => setStep(prev => Math.min(prev + 1, steps.length - 1));
   const prevStep = () => setStep(prev => Math.max(prev - 1, 0));
 
@@ -165,7 +174,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               className="flex-1 min-h-0 flex flex-col"
             >
               <div className="mt-8 mb-12 flex-shrink-0">
-                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Étape 01</p>
+                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Étape {getDisplayStep(1)}</p>
                 <h2 className="text-4xl font-black text-[#0F172A] tracking-tight mb-2">Enchanté !</h2>
                 <p className="text-slate-500 font-medium">Commençons par faire connaissance.</p>
               </div>
@@ -223,7 +232,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               className="flex-1 min-h-0 flex flex-col"
             >
               <div className="mt-8 mb-12 flex-shrink-0">
-                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Étape 02</p>
+                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Étape {getDisplayStep(2)}</p>
                 <h2 className="text-4xl font-black text-[#0F172A] tracking-tight mb-2">Votre métier ?</h2>
                 <p className="text-slate-500 font-medium">L'IA s'adaptera à votre convention collective.</p>
               </div>
@@ -299,7 +308,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               className="flex-1 min-h-0 flex flex-col"
             >
               <div className="mt-8 mb-12 flex-shrink-0">
-                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Plusieurs casquettes</p>
+                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Étape {getDisplayStep(3)}</p>
                 <h2 className="text-4xl font-black text-[#0F172A] tracking-tight mb-2">L'essentiel</h2>
                 <p className="text-slate-500 font-medium">L'activité que vous pratiquez le plus souvent.</p>
               </div>
@@ -358,7 +367,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               className="flex-1 min-h-0 flex flex-col"
             >
               <div className="mt-8 mb-8 flex-shrink-0">
-                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Étape 03</p>
+                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Étape {getDisplayStep(4)}</p>
                 <h2 className="text-4xl font-black text-[#0F172A] tracking-tight mb-2">Votre contrat</h2>
                 <p className="text-slate-500 font-medium">Calcul des heures supplémentaires et modulation.</p>
               </div>
@@ -426,39 +435,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     </p>
                   </div>
 
-                  {/* Congés Payés Restants */}
-                  <div className="space-y-4 pt-4">
-                    <div className="flex justify-between items-center ml-1">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Congés payés restants</label>
-                      <span className="text-indigo-600 font-black text-2xl">{initialCpBalance}j</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-3">
-                      {[15, 20, 25, 30].map(val => (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => setInitialCpBalance(val)}
-                          className={`py-4 rounded-xl font-black text-xs transition-all border-[1.5px] ${
-                            initialCpBalance === val ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20' : 'bg-white text-slate-600 border-slate-100'
-                          }`}
-                        >
-                          {val}j
-                        </button>
-                      ))}
-                    </div>
-                    <div className="relative">
-                      <input 
-                        type="number"
-                        placeholder="Autre nombre de jours"
-                        value={![15, 20, 25, 30].includes(initialCpBalance) ? initialCpBalance : ''}
-                        onChange={(e) => setInitialCpBalance(Number(e.target.value))}
-                        className={`w-full py-4 rounded-xl font-black text-xs text-center outline-none transition-all border-[1.5px] placeholder:text-slate-300 ${
-                          ![15, 20, 25, 30].includes(initialCpBalance) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-100'
-                        }`}
-                      />
-                    </div>
-                  </div>
-
                   {overtimeMode === 'modulation' && (
                     <motion.div 
                       initial={{ opacity: 0, y: -10 }}
@@ -501,6 +477,39 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                       </div>
                     </motion.div>
                   )}
+
+                  {/* Congés Payés Restants */}
+                  <div className="space-y-4 pt-4">
+                    <div className="flex justify-between items-center ml-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Congés payés restants</label>
+                      <span className="text-indigo-600 font-black text-2xl">{initialCpBalance}j</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-3">
+                      {[15, 20, 25, 30].map(val => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setInitialCpBalance(val)}
+                          className={`py-4 rounded-xl font-black text-xs transition-all border-[1.5px] ${
+                            initialCpBalance === val ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20' : 'bg-white text-slate-600 border-slate-100'
+                          }`}
+                        >
+                          {val}j
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type="number"
+                        placeholder="Autre nombre de jours"
+                        value={![15, 20, 25, 30].includes(initialCpBalance) ? initialCpBalance : ''}
+                        onChange={(e) => setInitialCpBalance(Number(e.target.value))}
+                        className={`w-full py-4 rounded-xl font-black text-xs text-center outline-none transition-all border-[1.5px] placeholder:text-slate-300 ${
+                          ![15, 20, 25, 30].includes(initialCpBalance) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-100'
+                        }`}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Missions Complémentaires */}
@@ -574,61 +583,112 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               exit="exit"
               className="flex-1 min-h-0 flex flex-col"
             >
-              <div className="mt-8 mb-12">
-                <p className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Étape 04</p>
-                <h2 className="text-4xl font-black text-[#0F172A] tracking-tight mb-2">Automatisations</h2>
-                <p className="text-slate-500 font-medium">Gagnez du temps au quotidien.</p>
+              <div className="mt-8 mb-8">
+                <motion.p 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3"
+                >
+                  Étape {getDisplayStep(5)}
+                </motion.p>
+                <motion.h2 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-4xl font-black text-[#0F172A] tracking-tight mb-2"
+                >
+                  Automatisations
+                </motion.h2>
+                <motion.p 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-slate-500 font-medium"
+                >
+                  Gagnez du temps au quotidien.
+                </motion.p>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-6 custom-scrollbar">
-                <div className={`p-8 rounded-[32px] border-[1.5px] transition-all duration-500 flex items-center justify-between ${
-                  autoGeo ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100'
-                }`}>
-                  <div className="flex items-center gap-6">
-                    <div className={`w-16 h-16 rounded-[24px] flex items-center justify-center transition-colors ${
-                      autoGeo ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      <MapPin size={32} />
-                    </div>
-                    <div>
-                      <p className="font-black text-xl text-[#0F172A]">Géolocalisation</p>
-                      <p className="text-xs text-slate-400 font-medium">Détecte automatiquement vos lieux de prise de service</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setAutoGeo(!autoGeo)}
-                    className={`w-16 h-9 rounded-full transition-all relative outline-none ring-offset-4 focus:ring-2 focus:ring-indigo-500 ${autoGeo ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                  >
-                    <div className={`absolute top-1 w-7 h-7 bg-white rounded-full shadow-lg transition-all ${autoGeo ? 'left-8 scale-90' : 'left-1 scale-90'}`} />
-                  </button>
-                </div>
 
-                <div className={`p-8 rounded-[32px] border-[1.5px] transition-all duration-500 flex items-center justify-between ${
-                  pushEnabled ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'
-                }`}>
-                  <div className="flex items-center gap-6">
-                    <div className={`w-16 h-16 rounded-[24px] flex items-center justify-center transition-colors ${
-                      pushEnabled ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      <Bell size={32} />
-                    </div>
-                    <div>
-                      <p className="font-black text-xl text-[#0F172A]">Notifications</p>
-                      <p className="text-xs text-slate-400 font-medium">Alertes de fin de service et rappels personnalisés</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setPushEnabled(!pushEnabled)}
-                    className={`w-16 h-9 rounded-full transition-all relative outline-none ring-offset-4 focus:ring-2 focus:ring-amber-500 ${pushEnabled ? 'bg-amber-500' : 'bg-slate-200'}`}
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-5 custom-scrollbar pb-6">
+                {[
+                  {
+                    id: 'geo',
+                    title: 'Géolocalisation',
+                    desc: 'Détecte automatiquement vos lieux de prise de service',
+                    icon: MapPin,
+                    active: autoGeo,
+                    setter: () => setAutoGeo(!autoGeo),
+                    color: 'indigo'
+                  },
+                  {
+                    id: 'push',
+                    title: 'Notifications',
+                    desc: 'Alertes de fin de service et rappels personnalisés',
+                    icon: Bell,
+                    active: pushEnabled,
+                    setter: () => setPushEnabled(!pushEnabled),
+                    color: 'amber'
+                  }
+                ].map((item, idx) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 + (idx * 0.1) }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={item.setter}
+                    className={`group cursor-pointer p-6 rounded-[32px] border-[1.5px] transition-all duration-300 flex items-center justify-between ${
+                      item.active 
+                        ? (item.id === 'geo' ? 'bg-indigo-50/80 border-indigo-200 shadow-[0_8px_30px_rgb(99,102,241,0.1)]' : 'bg-amber-50/80 border-amber-200 shadow-[0_8px_30px_rgb(245,158,11,0.15)]')
+                        : 'bg-white border-slate-100 hover:border-slate-200 shadow-sm'
+                    }`}
                   >
-                    <div className={`absolute top-1 w-7 h-7 bg-white rounded-full shadow-lg transition-all ${pushEnabled ? 'left-8 scale-90' : 'left-1 scale-90'}`} />
-                  </button>
-                </div>
+                    <div className="flex items-center gap-5">
+                      <div className={`w-14 h-14 rounded-[22px] flex items-center justify-center transition-all duration-500 ${
+                        item.active 
+                          ? (item.id === 'geo' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 rotate-3' : 'bg-amber-500 text-white shadow-lg shadow-amber-500/30 -rotate-3') 
+                          : 'bg-slate-50 text-slate-400 group-hover:scale-110'
+                      }`}>
+                        <item.icon size={28} />
+                      </div>
+                      <div className="flex-1">
+                        <p className={`font-black text-lg transition-colors ${item.active ? 'text-[#0F172A]' : 'text-slate-400'}`}>
+                          {item.title}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-bold leading-relaxed max-w-[180px]">
+                          {item.desc}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div 
+                      className={`w-14 h-8 rounded-full transition-all relative ${
+                        item.active 
+                          ? (item.id === 'geo' ? 'bg-indigo-600 shadow-inner' : 'bg-amber-500 shadow-inner') 
+                          : 'bg-slate-200 shadow-inner'
+                      }`}
+                    >
+                      <motion.div 
+                        animate={{ x: item.active ? 24 : 4 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md" 
+                      />
+                    </div>
+                  </motion.div>
+                ))}
               </div>
-              <div className="mt-auto pt-8 flex gap-4 flex-shrink-0">
-                <button onClick={prevStep} className="p-5 bg-white text-slate-400 border border-slate-100 rounded-2xl shadow-sm transition-colors"><ChevronLeft /></button>
+
+              <div className="mt-auto pt-6 flex gap-4 flex-shrink-0">
+                <button 
+                  onClick={prevStep} 
+                  className="p-5 bg-white text-slate-300 border border-slate-100 hover:text-slate-500 hover:border-slate-200 rounded-2xl shadow-sm transition-all active:scale-95"
+                >
+                  <ChevronLeft />
+                </button>
                 <button 
                   onClick={nextStep} 
-                  className="flex-1 py-5 bg-[#0F172A] text-white font-black rounded-2xl uppercase tracking-widest text-xs shadow-xl shadow-slate-900/20"
+                  className="flex-1 py-5 bg-[#0F172A] text-white font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-slate-900/20 active:scale-[0.98] transition-all"
                 >
                   Finaliser la configuration
                 </button>

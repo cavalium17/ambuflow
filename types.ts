@@ -63,6 +63,7 @@ export interface UserProfile {
   payRateMode: '100_percent' | '90_percent';
   supplementaryTaskType?: 'none' | 'type_1' | 'type_2' | 'type_3';
   initialCpBalance?: number;
+  lastCpAccrualDate?: string; // Format: "YYYY-MM"
 }
 
 export interface Badge {

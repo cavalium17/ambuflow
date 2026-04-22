@@ -244,20 +244,7 @@ const sanitizeData = (data: any): any => {
 const App: React.FC = () => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [configLoading, setConfigLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<AppTab>('home');
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [isGuest, setIsGuest] = useState(() => localStorage.getItem('ambuflow_is_guest') === 'true');
-
-  const [carouselIndex, setCarouselIndex] = useState(0);
-  const [gainsCarouselIndex, setGainsCarouselIndex] = useState(0);
-  const [showDailyRecap, setShowDailyRecap] = useState(false);
-  const [lastFinishedShift, setLastFinishedShift] = useState<Shift | null>(null);
-  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
-  
-  const [hasNewReport, setHasNewReport] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-
   const [notifications, setNotifications] = useState<PushType[]>(() => {
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -278,6 +265,17 @@ const App: React.FC = () => {
     }
     return [];
   });
+  
+  const [configLoading, setConfigLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<AppTab>('home');
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isGuest, setIsGuest] = useState(() => localStorage.getItem('ambuflow_is_guest') === 'true');
+
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [gainsCarouselIndex, setGainsCarouselIndex] = useState(0);
+  const [showDailyRecap, setShowDailyRecap] = useState(false);
+  const [lastFinishedShift, setLastFinishedShift] = useState<Shift | null>(null);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   
   const getLocalDateString = useCallback((date: Date) => {
     const y = date.getFullYear();
@@ -354,6 +352,7 @@ const App: React.FC = () => {
   const [modulationStartDate, setModulationStartDate] = useState("");
   const [modulationWeeks, setModulationWeeks] = useState("4");
   const [initialCpBalance, setInitialCpBalance] = useState(0);
+  const [lastCpAccrualDate, setLastCpAccrualDate] = useState<string>("");
   const [customHours, setCustomHours] = useState("");
   const [weekendDays, setWeekendDays] = useState<string[]>([]);
   const [followSystemTheme, setFollowSystemTheme] = useState(true);
@@ -459,6 +458,7 @@ const App: React.FC = () => {
       const newVal = parseFloat(config.initialCpBalance || "0");
       return prev !== newVal ? newVal : prev;
     });
+    if (config.lastCpAccrualDate !== undefined) setLastCpAccrualDate(prev => prev !== config.lastCpAccrualDate ? config.lastCpAccrualDate : prev);
     if (config.customHours !== undefined) setCustomHours(prev => prev !== config.customHours ? config.customHours : prev);
     if (config.weekendDays !== undefined) setWeekendDays(prev => JSON.stringify(prev) !== JSON.stringify(config.weekendDays) ? config.weekendDays : prev);
     if (config.pushEnabled !== undefined) setPushEnabled(prev => prev !== config.pushEnabled ? config.pushEnabled : prev);
@@ -648,6 +648,7 @@ const App: React.FC = () => {
       modulationStartDate,
       modulationWeeks,
       initialCpBalance,
+      lastCpAccrualDate,
       customHours,
       weekendDays,
       pushEnabled,
@@ -695,7 +696,7 @@ const App: React.FC = () => {
     } finally {
       isSavingRef.current = false;
     }
-  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, customHours, weekendDays, pushEnabled, followSystemTheme, onboarded, roles, primaryRole, weeklyContractHours, overtimeMode, payRateMode]);
+  }, [user, userName, profileImage, jobTitle, hourlyRate, companyName, companyCity, firstName, lastName, qualifications, entryDate, workRegime, monthlyHours, leaveCalculation, autoGeo, hasDea, hasAux, hasTaxiCard, primaryGraduationDate, deaDate, auxDate, taxiDate, taxiCardExpiryDate, taxiFpcDate, afgsuDate, medicalExpiryDate, contractStartDate, contractType, hoursBase, cpCalculationMode, modulationStartDate, modulationWeeks, initialCpBalance, lastCpAccrualDate, customHours, weekendDays, pushEnabled, followSystemTheme, onboarded, roles, primaryRole, weeklyContractHours, overtimeMode, payRateMode]);
 
   useEffect(() => {
     if (user || isGuest) {
@@ -705,6 +706,47 @@ const App: React.FC = () => {
       return () => clearTimeout(timeout);
     }
   }, [user, isGuest, saveConfig, status, activeShiftId, scheduledShiftId, nextAutoStart, shifts, logs, breakStartDateTime, breakEndTimeActual, notifications]);
+
+  // Gestion des congés payés automatiques au 1er du mois
+  useEffect(() => {
+    if (!onboarded) return;
+
+    const currentMonthStr = `${currentTime.getFullYear()}-${String(currentTime.getMonth() + 1).padStart(2, '0')}`;
+    
+    if (!lastCpAccrualDate) {
+      setLastCpAccrualDate(currentMonthStr);
+      return;
+    }
+
+    const [lastYear, lastMonth] = lastCpAccrualDate.split('-').map(Number);
+    const lastDate = new Date(lastYear, lastMonth - 1, 1);
+    const currentDate = new Date(currentTime.getFullYear(), currentTime.getMonth(), 1);
+
+    if (currentDate > lastDate) {
+      const monthsDiff = (currentDate.getFullYear() - lastDate.getFullYear()) * 12 + (currentDate.getMonth() - lastDate.getMonth());
+      
+      if (monthsDiff > 0) {
+        let daysPerMonth = 0;
+        if (weeklyContractHours === 35) {
+          daysPerMonth = 2.08;
+        } else if (weeklyContractHours === 39) {
+          daysPerMonth = 2.5;
+        } else {
+          daysPerMonth = cpCalculationMode === '30' ? 2.5 : 2.08;
+        }
+
+        const totalToCredit = parseFloat((daysPerMonth * monthsDiff).toFixed(2));
+        setInitialCpBalance(prev => prev + totalToCredit);
+        setLastCpAccrualDate(currentMonthStr);
+        
+        addNotification(
+          "Crédit Congés Payés",
+          `Votre solde a été crédité de ${totalToCredit}j au titre de la période écoulée (${monthsDiff} mois).`,
+          'success'
+        );
+      }
+    }
+  }, [currentTime, onboarded, lastCpAccrualDate, weeklyContractHours, cpCalculationMode, addNotification]);
 
   const handleOnboardingComplete = useCallback((profile: Partial<UserProfile>) => {
     if (profile.firstName) setFirstName(profile.firstName);
@@ -743,6 +785,10 @@ const App: React.FC = () => {
     if (profile.payRateMode !== undefined) setPayRateMode(profile.payRateMode);
     if (profile.supplementaryTaskType !== undefined) setSupplementaryTaskType(profile.supplementaryTaskType as any);
     if (profile.initialCpBalance !== undefined) setInitialCpBalance(profile.initialCpBalance);
+    
+    // Initialize accrual date to avoid double crediting same month as onboarding
+    const currentMonth = `${currentTime.getFullYear()}-${String(currentTime.getMonth() + 1).padStart(2, '0')}`;
+    setLastCpAccrualDate(currentMonth);
     
     setUserName(`${profile.firstName || ''} ${profile.lastName || ''}`.trim());
     
@@ -839,30 +885,7 @@ const App: React.FC = () => {
   }, [status, activeShiftId, shifts, pushEnabled, addNotification]);
 
   // Notification Rapport Mensuel (1er du mois à 00:01)
-  useEffect(() => {
-    const checkMonthlyReport = () => {
-      const now = new Date();
-      // On vérifie si on est le 1er du mois
-      if (now.getDate() === 1) {
-        const monthKey = `monthly_report_notif_${now.getFullYear()}_${now.getMonth()}`;
-        if (!localStorage.getItem(monthKey)) {
-          const increment = cpCalculationMode === '30' ? 2.5 : 2.08;
-          setInitialCpBalance(prev => prev + increment);
-          addNotification(
-            "SOLDE CP MIS À JOUR",
-            `+${increment} jours ajoutés pour le nouveau mois.`,
-            "success"
-          );
-          localStorage.setItem(monthKey, 'true');
-        }
-      }
-    };
-    
-    // Vérification immédiate et toutes les heures
-    checkMonthlyReport();
-    const interval = setInterval(checkMonthlyReport, 3600000);
-    return () => clearInterval(interval);
-  }, [addNotification, cpCalculationMode, setInitialCpBalance]);
+  // Logic merged into the more robust useEffect for CP accrual above
 
   const seniorityInfo = useMemo(() => {
     if (!contractStartDate) return { years: 0, months: 0, bonus: 0, text: "N/A" };
@@ -1642,7 +1665,7 @@ const App: React.FC = () => {
     }
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
-    const progress = (totalMin / targetMin) * 100;
+    const progress = targetMin > 0 ? (totalMin / targetMin) * 100 : 0;
     return { title, subtitle, icon, value: `${h}h ${m}m`, color, extraData, progress };
   }, [shifts, workRegime, calculateEffectiveMinutes, currentTime, contractStartDate, modulationStartDate, modulationWeeks, hoursBase, status, breakStartDateTime]);
 
