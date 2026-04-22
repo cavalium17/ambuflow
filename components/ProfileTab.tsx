@@ -42,6 +42,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 interface ProfileTabProps {
   darkMode: boolean;
   userName: string;
+  userEmail?: string | null;
   firstName?: string;
   lastName?: string;
   setUserName: (val: string) => void;
@@ -108,6 +109,7 @@ interface ProfileTabProps {
 const ProfileTab: React.FC<ProfileTabProps> = ({
   darkMode,
   userName,
+  userEmail,
   firstName = "",
   lastName = "",
   setUserName,
@@ -170,6 +172,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 }) => {
   const [isResetting, setIsResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [showModulationDateModal, setShowModulationDateModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -218,6 +221,68 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 
   const seniorityText = seniorityInfo?.text || "N/A";
   const seniorityBonus = seniorityInfo?.bonus ? `+${(seniorityInfo.bonus * 100).toFixed(0)}%` : "+0%";
+
+  const registerPasskey = async () => {
+    if (!window.PublicKeyCredential) return;
+    
+    setPasskeyLoading(true);
+
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      const userId = Math.random().toString(36).substr(2, 9);
+      
+      const options: CredentialCreationOptions = {
+        publicKey: {
+          challenge,
+          rp: {
+            name: "AmbuFlow",
+            id: window.location.hostname === "localhost" ? "localhost" : window.location.hostname,
+          },
+          user: {
+            id: new TextEncoder().encode(userId),
+            name: userEmail || "utilisateur@ambuflow.com",
+            displayName: userName || "Utilisateur AmbuFlow",
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: "public-key" },
+            { alg: -257, type: "public-key" }
+          ],
+          timeout: 60000,
+          attestation: "none",
+          authenticatorSelection: {
+            userVerification: "required",
+            residentKey: "required",
+            requireResidentKey: true,
+          }
+        }
+      };
+
+      const credential = await navigator.credentials.create(options);
+      
+      if (credential) {
+        setIsPasskeyEnabled(true);
+        console.log("Passkey registered via Profile:", credential);
+        alert("Passkey configuré avec succès sur cet appareil !");
+      }
+    } catch (err: any) {
+      console.error("Passkey profile registration error:", err);
+      if (err.name !== 'NotAllowedError') {
+        alert("Erreur lors de la configuration du Passkey. Vérifiez que votre appareil supporte la biométrie.");
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
+  const handlePasskeyToggle = () => {
+    if (!isPasskeyEnabled) {
+      registerPasskey();
+    } else {
+      setIsPasskeyEnabled(false);
+    }
+  };
 
   const complianceItems = React.useMemo(() => {
     const now = new Date();
@@ -755,10 +820,17 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               <span className="text-sm font-bold">Passkey / Biométrie</span>
             </div>
             <button 
-              onClick={() => setIsPasskeyEnabled(!isPasskeyEnabled)} 
-              className={`w-12 h-6 rounded-full relative transition-all ${isPasskeyEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}
+              onClick={handlePasskeyToggle}
+              disabled={passkeyLoading}
+              className={`w-12 h-6 rounded-full relative transition-all ${isPasskeyEnabled ? 'bg-indigo-600' : 'bg-slate-700'} ${passkeyLoading ? 'opacity-50' : ''}`}
             >
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isPasskeyEnabled ? 'left-7' : 'left-1'}`} />
+              {passkeyLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 size={10} className="text-white animate-spin" />
+                </div>
+              ) : (
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isPasskeyEnabled ? 'left-7' : 'left-1'}`} />
+              )}
             </button>
           </div>
 

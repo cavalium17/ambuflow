@@ -19,15 +19,17 @@ import {
   User,
   Fingerprint,
   ShieldCheck,
-  Smartphone
+  Smartphone,
+  Loader2
 } from 'lucide-react';
 import { UserRole, UserProfile } from '../types';
 
 interface OnboardingProps {
   onComplete: (profile: Partial<UserProfile>) => void;
+  userEmail?: string | null;
 }
 
-const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
+const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userEmail }) => {
   const [step, setStep] = useState(0);
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [primaryRole, setPrimaryRole] = useState<UserRole | ''>('');
@@ -47,6 +49,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [isPasskeyEnabled, setIsPasskeyEnabled] = useState(false);
   const [isPasskeySupported, setIsPasskeySupported] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if WebAuthn is supported
@@ -61,6 +65,69 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       setSupplementaryTaskType('type_2');
     }
   }, [roles]);
+
+  const registerPasskey = async () => {
+    if (!window.PublicKeyCredential) return;
+    
+    setPasskeyLoading(true);
+    setPasskeyError(null);
+
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      const userId = Math.random().toString(36).substr(2, 9);
+      
+      const options: CredentialCreationOptions = {
+        publicKey: {
+          challenge,
+          rp: {
+            name: "AmbuFlow",
+            id: window.location.hostname === "localhost" ? "localhost" : window.location.hostname,
+          },
+          user: {
+            id: new TextEncoder().encode(userId),
+            name: userEmail || "utilisateur@ambuflow.com",
+            displayName: firstName || "Utilisateur AmbuFlow",
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: "public-key" }, // ES256
+            { alg: -257, type: "public-key" } // RS256
+          ],
+          timeout: 60000,
+          attestation: "none",
+          authenticatorSelection: {
+            userVerification: "required",
+            residentKey: "required",
+            requireResidentKey: true,
+          }
+        }
+      };
+
+      const credential = await navigator.credentials.create(options);
+      
+      if (credential) {
+        setIsPasskeyEnabled(true);
+        console.log("Passkey registered locally:", credential);
+        // On success, we set it enabled. In a real app we would send public key to DB.
+      }
+    } catch (err: any) {
+      console.error("Passkey registration error:", err);
+      if (err.name !== 'NotAllowedError') {
+        setPasskeyError("Le smartphone a refusé la création du Passkey. Vérifiez vos paramètres système.");
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
+  const handlePasskeyToggle = () => {
+    if (!isPasskeyEnabled) {
+      registerPasskey();
+    } else {
+      setIsPasskeyEnabled(false);
+    }
+  };
 
   const steps = [
     'Value Prop',
@@ -777,16 +844,38 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 </div>
 
                 <button 
-                  onClick={() => setIsPasskeyEnabled(!isPasskeyEnabled)}
+                  onClick={handlePasskeyToggle}
+                  disabled={passkeyLoading}
                   className={`w-full max-w-sm py-6 rounded-[28px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 active:scale-95 ${
                     isPasskeyEnabled 
-                      ? 'bg-emerald-50 text-emerald-600 border-[1.5px] border-emerald-200' 
-                      : 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30'
+                      ? 'bg-emerald-50 text-emerald-600 border-[1.5px] border-emerald-200 shadow-lg shadow-emerald-500/10' 
+                      : 'bg-[#0F172A] text-white shadow-xl shadow-slate-900/30'
                   }`}
                 >
-                  {isPasskeyEnabled ? <ShieldCheck size={20} /> : <Smartphone size={20} />}
-                  {isPasskeyEnabled ? 'Passkey Activé' : 'Activer avec Biométrie'}
+                  {passkeyLoading ? (
+                    <Loader2 className="animate-spin" size={20} />
+                  ) : isPasskeyEnabled ? (
+                    <>
+                      <ShieldCheck size={20} />
+                      Passkey Activé
+                    </>
+                  ) : (
+                    <>
+                      <Fingerprint size={20} />
+                      Activer avec Biométrie
+                    </>
+                  )}
                 </button>
+
+                {passkeyError && (
+                  <motion.p 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-[10px] text-rose-500 font-bold uppercase tracking-wider text-center mt-2 max-w-xs"
+                  >
+                    {passkeyError}
+                  </motion.p>
+                )}
               </div>
 
               <div className="mt-auto pt-6 flex gap-4 flex-shrink-0">

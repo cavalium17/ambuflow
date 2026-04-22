@@ -2539,7 +2539,7 @@ const App: React.FC = () => {
           }} 
         />
       ) : !onboarded && isAuthReady && !authLoading ? (
-        <Onboarding onComplete={handleOnboardingComplete} />
+        <Onboarding onComplete={handleOnboardingComplete} userEmail={user?.email} />
       ) : (
         <div className={`min-h-screen transition-colors duration-500 font-sans pb-28 flex flex-col relative ${effectiveDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>
         <AnimatePresence mode="wait">
@@ -2682,6 +2682,7 @@ const App: React.FC = () => {
               {activeTab === 'profile' && <ProfileTab 
                 darkMode={effectiveDarkMode} 
                 userName={userName} 
+                userEmail={user?.email}
                 firstName={firstName}
                 lastName={lastName}
                 setUserName={setUserName}
