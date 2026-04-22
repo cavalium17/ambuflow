@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { startRegistration } from '@simplewebauthn/browser';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronRight, 
@@ -73,48 +74,23 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userEmail }) => {
     setPasskeyError(null);
 
     try {
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
-
-      const userId = Math.random().toString(36).substr(2, 9);
+      // 1. Récupérer les options depuis l'API
+      const resp = await fetch('/api/register');
+      if (!resp.ok) throw new Error('Erreur lors de la récupération des options');
       
-      const options: CredentialCreationOptions = {
-        publicKey: {
-          challenge,
-          rp: {
-            name: "AmbuFlow",
-            id: window.location.hostname === "localhost" ? "localhost" : window.location.hostname,
-          },
-          user: {
-            id: new TextEncoder().encode(userId),
-            name: userEmail || "utilisateur@ambuflow.com",
-            displayName: firstName || "Utilisateur AmbuFlow",
-          },
-          pubKeyCredParams: [
-            { alg: -7, type: "public-key" }, // ES256
-            { alg: -257, type: "public-key" } // RS256
-          ],
-          timeout: 60000,
-          attestation: "none",
-          authenticatorSelection: {
-            userVerification: "required",
-            residentKey: "required",
-            requireResidentKey: true,
-          }
-        }
-      };
+      const options = await resp.json();
 
-      const credential = await navigator.credentials.create(options);
+      // 2. Lancement du processus SimpleWebAuthn
+      const registrationResponse = await startRegistration(options);
       
-      if (credential) {
+      if (registrationResponse) {
         setIsPasskeyEnabled(true);
-        console.log("Passkey registered locally:", credential);
-        // On success, we set it enabled. In a real app we would send public key to DB.
+        console.log("Passkey registered via Onboarding (SimpleWebAuthn):", registrationResponse);
       }
     } catch (err: any) {
-      console.error("Passkey registration error:", err);
+      console.error("Onboarding Passkey error:", err);
       if (err.name !== 'NotAllowedError') {
-        setPasskeyError("Le smartphone a refusé la création du Passkey. Vérifiez vos paramètres système.");
+        setPasskeyError("Erreur : " + (err.message || "Échec de l'enregistrement biométrique."));
       }
     } finally {
       setPasskeyLoading(false);

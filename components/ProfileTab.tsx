@@ -1,5 +1,6 @@
 
 import React, { useRef, useState, useMemo } from 'react';
+import { startRegistration } from '@simplewebauthn/browser';
 import { 
   User, 
   ShieldCheck, 
@@ -222,54 +223,31 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   const seniorityText = seniorityInfo?.text || "N/A";
   const seniorityBonus = seniorityInfo?.bonus ? `+${(seniorityInfo.bonus * 100).toFixed(0)}%` : "+0%";
 
-  const registerPasskey = async () => {
+  const handleCreatePasskey = async () => {
     if (!window.PublicKeyCredential) return;
     
     setPasskeyLoading(true);
 
     try {
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
+      // 1. Demander les options au serveur (ton API qui affiche le JSON)
+      const resp = await fetch('/api/register');
+      if (!resp.ok) throw new Error('Erreur serveur');
+      const options = await resp.json();
 
-      const userId = Math.random().toString(36).substr(2, 9);
-      
-      const options: CredentialCreationOptions = {
-        publicKey: {
-          challenge,
-          rp: {
-            name: "AmbuFlow",
-            id: window.location.hostname === "localhost" ? "localhost" : window.location.hostname,
-          },
-          user: {
-            id: new TextEncoder().encode(userId),
-            name: userEmail || "utilisateur@ambuflow.com",
-            displayName: userName || "Utilisateur AmbuFlow",
-          },
-          pubKeyCredParams: [
-            { alg: -7, type: "public-key" },
-            { alg: -257, type: "public-key" }
-          ],
-          timeout: 60000,
-          attestation: "none",
-          authenticatorSelection: {
-            userVerification: "required",
-            residentKey: "required",
-            requireResidentKey: true,
-          }
-        }
-      };
+      // 2. Lancer la fenêtre biométrique système
+      const regResp = await startRegistration(options);
 
-      const credential = await navigator.credentials.create(options);
+      // 3. Si on arrive ici, c'est que l'utilisateur a scanné son doigt/visage !
+      console.log("Succès biométrique :", regResp);
+      setIsPasskeyEnabled(true);
+      alert("Passkey configurée avec succès sur cet appareil !");
       
-      if (credential) {
-        setIsPasskeyEnabled(true);
-        console.log("Passkey registered via Profile:", credential);
-        alert("Passkey configuré avec succès sur cet appareil !");
-      }
-    } catch (err: any) {
-      console.error("Passkey profile registration error:", err);
-      if (err.name !== 'NotAllowedError') {
-        alert("Erreur lors de la configuration du Passkey. Vérifiez que votre appareil supporte la biométrie.");
+    } catch (error: any) {
+      // Si l'utilisateur annule ou si le navigateur n'est pas compatible
+      if (error.name === 'NotAllowedError') {
+        console.log("L'utilisateur a annulé");
+      } else {
+        alert("Erreur : " + error.message);
       }
     } finally {
       setPasskeyLoading(false);
@@ -278,7 +256,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
 
   const handlePasskeyToggle = () => {
     if (!isPasskeyEnabled) {
-      registerPasskey();
+      handleCreatePasskey();
     } else {
       setIsPasskeyEnabled(false);
     }
@@ -833,6 +811,22 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               )}
             </button>
           </div>
+
+          <button
+            onClick={handleCreatePasskey}
+            className="w-full flex items-center justify-between p-4 bg-indigo-600/10 border border-indigo-600/20 rounded-2xl hover:bg-indigo-600/20 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-600 rounded-lg text-white">
+                <Fingerprint size={20} />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold text-white">Passkey Biométrique</p>
+                <p className="text-[10px] text-white/50">Activer FaceID ou Empreinte</p>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-white/20 group-hover:translate-x-1 transition-transform" />
+          </button>
 
           <div className="pt-6 border-t border-white/5">
             <div className="mb-4">

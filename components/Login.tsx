@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { startAuthentication } from '@simplewebauthn/browser';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Mail, 
@@ -56,34 +57,24 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
     setError(null);
 
     try {
-      // For a real implementation, you'd fetch a challenge from your server first.
-      // Here we simulate the device biometric prompt using WebAuthn API.
+      // 1. Récupérer les options d'authentification depuis l'API
+      const resp = await fetch('/api/login-options');
+      if (!resp.ok) throw new Error('Impossible de récupérer les options de connexion');
       
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
+      const options = await resp.json();
 
-      const options: CredentialRequestOptions = {
-        publicKey: {
-          challenge: challenge,
-          timeout: 60000,
-          userVerification: "required",
-          rpId: window.location.hostname === "localhost" ? "localhost" : window.location.hostname,
-        }
-      };
+      // 2. Déclencher le prompt biométrique (FaceID/Fingerprint)
+      const authResponse = await startAuthentication(options);
 
-      // This will trigger the smartphone/computer biometric prompt (FaceID/Fingerprint)
-      const credential = await navigator.credentials.get(options);
-
-      if (credential) {
-        // In a real app, you would send the credential to your backend to verify and sign in.
-        // For this demo, we'll simulate a successful authentication.
-        console.log("Passkey authenticated successfully", credential);
+      if (authResponse) {
+        // 3. Ici on enverrait normalement la réponse au serveur pour vérification
+        console.log("Passkey authenticated successfully via SimpleWebAuthn", authResponse);
         if (onLoginSuccess) onLoginSuccess();
       }
     } catch (err: any) {
       console.error("Passkey error:", err);
-      if (err.name !== 'NotAllowedError') { // Ignore user cancelation
-        setError("Échec de l'authentification Passkey. Assurez-vous d'avoir configuré un Passkey pour ce domaine.");
+      if (err.name !== 'NotAllowedError') {
+        setError("Échec de l'authentification Passkey. Vérifiez que vous avez configuré un Passkey.");
       }
     } finally {
       setLoading(false);
