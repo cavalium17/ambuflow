@@ -16,7 +16,10 @@ import {
   Play,
   Calendar,
   Briefcase,
-  User
+  User,
+  Fingerprint,
+  ShieldCheck,
+  Smartphone
 } from 'lucide-react';
 import { UserRole, UserProfile } from '../types';
 
@@ -42,6 +45,16 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [initialCpBalance, setInitialCpBalance] = useState(25);
   const [autoGeo, setAutoGeo] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(true);
+  const [isPasskeyEnabled, setIsPasskeyEnabled] = useState(false);
+  const [isPasskeySupported, setIsPasskeySupported] = useState(false);
+
+  useEffect(() => {
+    // Check if WebAuthn is supported
+    if (window.PublicKeyCredential) {
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+        .then(supported => setIsPasskeySupported(supported));
+    }
+  }, []);
 
   useEffect(() => {
     if (roles.length >= 2 && roles.includes('taxi')) {
@@ -56,6 +69,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     'Priorité',
     'Contrat',
     'Permissions',
+    'Passkey',
     'Activation'
   ];
 
@@ -95,7 +109,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       supplementaryTaskType,
       initialCpBalance,
       autoGeo,
-      pushEnabled
+      pushEnabled,
+      isPasskeyEnabled
     });
   };
 
@@ -699,6 +714,98 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           {step === 6 && (
             <motion.div 
               key="step6"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex-1 min-h-0 flex flex-col"
+            >
+              <div className="mt-8 mb-8">
+                <motion.p 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3"
+                >
+                  Étape {getDisplayStep(6)}
+                </motion.p>
+                <motion.h2 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-4xl font-black text-[#0F172A] tracking-tight mb-2"
+                >
+                  Passkey & Biométrie
+                </motion.h2>
+                <motion.p 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-slate-500 font-medium"
+                >
+                  Sécurisez votre compte avec votre empreinte ou FaceID.
+                </motion.p>
+              </div>
+
+              <div className="flex-1 flex flex-col items-center justify-center space-y-10 py-10">
+                <div className="relative">
+                   <motion.div 
+                     animate={{ rotate: isPasskeyEnabled ? 0 : -6 }}
+                     className={`w-32 h-32 rounded-[40px] flex items-center justify-center transition-all duration-700 ${isPasskeyEnabled ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-600/40' : 'bg-slate-50 text-slate-300'}`}
+                   >
+                      <Fingerprint size={64} className={isPasskeyEnabled ? 'animate-pulse' : ''} />
+                   </motion.div>
+                   {isPasskeyEnabled && (
+                     <motion.div 
+                        initial={{ scale: 0 }} 
+                        animate={{ scale: 1 }} 
+                        className="absolute -top-3 -right-3 w-10 h-10 bg-emerald-500 rounded-full border-4 border-white flex items-center justify-center shadow-lg"
+                     >
+                        <Check className="text-white" size={20} />
+                     </motion.div>
+                   )}
+                   <div className="absolute -inset-4 bg-indigo-100/30 blur-3xl rounded-full -z-10" />
+                </div>
+
+                <div className="text-center space-y-4 max-w-xs">
+                  <p className="text-slate-500 font-medium leading-relaxed">
+                    {isPasskeyEnabled 
+                      ? "Votre passkey est configuré ! Vous pourrez l'utiliser pour vous connecter instantanément."
+                      : "Connexion instantanée et sécurisée grâce au module biométrique de votre smartphone."
+                    }
+                  </p>
+                </div>
+
+                <button 
+                  onClick={() => setIsPasskeyEnabled(!isPasskeyEnabled)}
+                  className={`w-full max-w-sm py-6 rounded-[28px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 active:scale-95 ${
+                    isPasskeyEnabled 
+                      ? 'bg-emerald-50 text-emerald-600 border-[1.5px] border-emerald-200' 
+                      : 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30'
+                  }`}
+                >
+                  {isPasskeyEnabled ? <ShieldCheck size={20} /> : <Smartphone size={20} />}
+                  {isPasskeyEnabled ? 'Passkey Activé' : 'Activer avec Biométrie'}
+                </button>
+              </div>
+
+              <div className="mt-auto pt-6 flex gap-4 flex-shrink-0">
+                <button onClick={prevStep} className="p-5 bg-white text-slate-300 border border-slate-100 rounded-2xl shadow-sm transition-all active:scale-95 hover:text-indigo-600 hover:border-indigo-100">
+                  <ChevronLeft />
+                </button>
+                <button 
+                  onClick={nextStep} 
+                  className="flex-1 py-5 bg-[#0F172A] text-white font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-slate-900/20 active:scale-[0.98] transition-all"
+                >
+                  Continuer
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 7 && (
+            <motion.div 
+              key="step7"
               variants={containerVariants}
               initial="initial"
               animate="animate"

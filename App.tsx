@@ -369,6 +369,7 @@ const App: React.FC = () => {
     }
     return false;
   });
+  const [isPasskeyEnabled, setIsPasskeyEnabled] = useState(false);
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [primaryRole, setPrimaryRole] = useState<UserRole | ''>('');
   const [weeklyContractHours, setWeeklyContractHours] = useState(35);
@@ -462,6 +463,7 @@ const App: React.FC = () => {
     if (config.customHours !== undefined) setCustomHours(prev => prev !== config.customHours ? config.customHours : prev);
     if (config.weekendDays !== undefined) setWeekendDays(prev => JSON.stringify(prev) !== JSON.stringify(config.weekendDays) ? config.weekendDays : prev);
     if (config.pushEnabled !== undefined) setPushEnabled(prev => prev !== config.pushEnabled ? config.pushEnabled : prev);
+    if (config.isPasskeyEnabled !== undefined) setIsPasskeyEnabled(prev => prev !== config.isPasskeyEnabled ? config.isPasskeyEnabled : prev);
     if (config.followSystemTheme !== undefined) setFollowSystemTheme(prev => prev !== config.followSystemTheme ? config.followSystemTheme : prev);
     if (config.onboarded !== undefined) {
       // If we just requested a reset, ignore any 'true' value from Firestore/cache until onboarding is complete again
@@ -652,6 +654,7 @@ const App: React.FC = () => {
       customHours,
       weekendDays,
       pushEnabled,
+      isPasskeyEnabled,
       followSystemTheme,
       onboarded,
       roles,
@@ -759,6 +762,7 @@ const App: React.FC = () => {
     if (profile.contractStartDate) setContractStartDate(profile.contractStartDate);
     if (profile.autoGeo !== undefined) setAutoGeo(profile.autoGeo);
     if (profile.pushEnabled !== undefined) setPushEnabled(profile.pushEnabled);
+    if (profile.isPasskeyEnabled !== undefined) setIsPasskeyEnabled(profile.isPasskeyEnabled);
     if (profile.onboarded !== undefined) {
       setOnboarded(profile.onboarded);
       if (profile.onboarded === true) {
@@ -2733,6 +2737,8 @@ const App: React.FC = () => {
                 setPayRateMode={setPayRateMode}
                 pushEnabled={pushEnabled}
                 setPushEnabled={setPushEnabled}
+                isPasskeyEnabled={isPasskeyEnabled}
+                setIsPasskeyEnabled={setIsPasskeyEnabled}
                 autoGeo={autoGeo}
                 setAutoGeo={setAutoGeo}
                 roles={roles}

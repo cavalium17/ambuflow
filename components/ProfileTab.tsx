@@ -31,7 +31,9 @@ import {
   RefreshCw,
   Camera,
   Loader2,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Fingerprint,
+  Smartphone
 } from 'lucide-react';
 import { Shift, ActivityLog, UserStats, UserRole } from '../types';
 import { storage } from '../src/firebaseConfig';
@@ -87,6 +89,8 @@ interface ProfileTabProps {
   setPayRateMode: (val: '100_percent' | '90_percent') => void;
   pushEnabled: boolean;
   setPushEnabled: (val: boolean) => void;
+  isPasskeyEnabled: boolean;
+  setIsPasskeyEnabled: (val: boolean) => void;
   autoGeo: boolean;
   setAutoGeo: (val: boolean) => void;
   roles: UserRole[];
@@ -149,6 +153,8 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   setPayRateMode,
   pushEnabled,
   setPushEnabled,
+  isPasskeyEnabled,
+  setIsPasskeyEnabled,
   autoGeo,
   setAutoGeo,
   roles = [],
@@ -738,6 +744,21 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               className={`w-12 h-6 rounded-full relative transition-all ${autoGeo ? 'bg-indigo-600' : 'bg-slate-700'}`}
             >
               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${autoGeo ? 'left-7' : 'left-1'}`} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                <Fingerprint size={18} />
+              </div>
+              <span className="text-sm font-bold">Passkey / Biométrie</span>
+            </div>
+            <button 
+              onClick={() => setIsPasskeyEnabled(!isPasskeyEnabled)} 
+              className={`w-12 h-6 rounded-full relative transition-all ${isPasskeyEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isPasskeyEnabled ? 'left-7' : 'left-1'}`} />
             </button>
           </div>
 
