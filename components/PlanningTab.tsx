@@ -508,9 +508,19 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
   };
 
   const calculateTotalDuration = (shift: Shift) => {
-    if (!shift.start || shift.end === '--:--') return '0H 0M';
-    const [h1, m1] = shift.start.split(':').map(Number);
-    const [h2, m2] = shift.end.split(':').map(Number);
+    if (!shift.start || !shift.end || shift.end === '--:--') return '0H 0M';
+    
+    const startParts = shift.start.split(':');
+    const endParts = shift.end.split(':');
+    
+    if (startParts.length < 2 || endParts.length < 2) return '0H 0M';
+
+    const h1 = parseInt(startParts[0], 10);
+    const m1 = parseInt(startParts[1], 10);
+    const h2 = parseInt(endParts[0], 10);
+    const m2 = parseInt(endParts[1], 10);
+    
+    if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return '0H 0M';
     
     let durationMin = (h2 * 60 + m2) - (h1 * 60 + m1);
     // Correction pour le passage à minuit
@@ -518,7 +528,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
     
     if (shift.breaks) {
       shift.breaks.forEach(b => {
-        durationMin -= b.duration;
+        durationMin -= (Number(b.duration) || 0);
       });
     }
     
@@ -649,11 +659,8 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
 
   const isNewShiftPast = useMemo(() => {
     if (!newShift.day) return false;
-    if (newShift.day < todayStr) return true;
-    // Condition: past 6 AM on today's date
-    if (newShift.day === todayStr && appCurrentTime.getHours() >= 6) return true;
-    return false;
-  }, [newShift.day, todayStr, appCurrentTime]);
+    return newShift.day < todayStr;
+  }, [newShift.day, todayStr]);
 
   return (
     <div className="p-4 space-y-6 animate-fadeIn pb-40">
@@ -883,7 +890,7 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
                     <input type="date" className={inputClass} value={newShift.day} onChange={(e) => setNewShift({...newShift, day: e.target.value})} />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className={isNewShiftPast ? "grid grid-cols-2 gap-4" : "grid grid-cols-1 gap-4"}>
                     <div className="space-y-2">
                       <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block px-1">Début</label>
                       <input type="time" className={inputClass} value={newShift.start} onChange={(e) => setNewShift({...newShift, start: e.target.value})} />
@@ -1129,126 +1136,130 @@ const PlanningTab: React.FC<PlanningTabProps> = ({
             </div>
             
             <div className="space-y-6">
-               <div className="grid grid-cols-2 gap-4">
+               <div className={editingShift.day < todayStr ? "grid grid-cols-2 gap-4" : "grid grid-cols-1 gap-4"}>
                   <div className="space-y-2">
                     <label className="text-indigo-500 font-black uppercase text-[9px] tracking-widest px-1">Début</label>
                     <input type="time" className={`w-full p-4 rounded-2xl ${darkMode ? 'bg-[#0F1221] text-white' : 'bg-slate-500/5 text-slate-900'} font-black border border-white/5 outline-none focus:border-indigo-500`} value={editingShift.start} onChange={e => setEditingShift({...editingShift, start: e.target.value})} />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-indigo-500 font-black uppercase text-[9px] tracking-widest px-1">Fin</label>
-                    <input type="time" className={`w-full p-4 rounded-2xl ${darkMode ? 'bg-[#0F1221] text-white' : 'bg-slate-500/5 text-slate-900'} font-black border border-white/5 outline-none focus:border-indigo-500`} value={editingShift.end} onChange={e => setEditingShift({...editingShift, end: e.target.value})} />
-                  </div>
+                  {editingShift.day < todayStr && (
+                    <div className="space-y-2">
+                      <label className="text-indigo-500 font-black uppercase text-[9px] tracking-widest px-1">Fin</label>
+                      <input type="time" className={`w-full p-4 rounded-2xl ${darkMode ? 'bg-[#0F1221] text-white' : 'bg-slate-500/5 text-slate-900'} font-black border border-white/5 outline-none focus:border-indigo-500`} value={editingShift.end} onChange={e => setEditingShift({...editingShift, end: e.target.value})} />
+                    </div>
+                  )}
                </div>
 
                {/* SECTION PAUSES & COUPURES */}
-               <div className={`space-y-4 pt-4 border-t ${darkMode ? 'border-white/10' : 'border-slate-500/10'}`}>
-                  <label className="text-indigo-500 font-black uppercase text-[9px] tracking-widest px-1 block">PAUSES & COUPURES</label>
-                  
-                  {/* Liste des pauses existantes */}
-                  {editingShift.breaks && editingShift.breaks.length > 0 && (
-                    <div className="space-y-2">
-                      {editingShift.breaks.map(b => (
-                        <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl border ${darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'}`}>
-                          <div className="flex items-center gap-3">
-                            <div className={`p-1.5 rounded-lg ${darkMode ? 'bg-white/10' : 'bg-slate-100'}`}>
-                              {b.isMeal ? <Utensils size={14} className="text-indigo-400" /> : <Coffee size={14} className="text-amber-400" />}
-                            </div>
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black">{b.start} - {b.end}</span>
-                                {b.isMeal && b.duration < 30 && (
-                                  <div className="flex items-center gap-1 text-amber-500" title="Moins de 30 min">
-                                    <AlertTriangle size={10} />
-                                  </div>
-                                )}
+               {editingShift.day < todayStr && (
+                 <div className={`space-y-4 pt-4 border-t ${darkMode ? 'border-white/10' : 'border-slate-500/10'}`}>
+                    <label className="text-indigo-500 font-black uppercase text-[9px] tracking-widest px-1 block">PAUSES & COUPURES</label>
+                    
+                    {/* Liste des pauses existantes */}
+                    {editingShift.breaks && editingShift.breaks.length > 0 && (
+                      <div className="space-y-2">
+                        {editingShift.breaks.map(b => (
+                          <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl border ${darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'}`}>
+                            <div className="flex items-center gap-3">
+                              <div className={`p-1.5 rounded-lg ${darkMode ? 'bg-white/10' : 'bg-slate-100'}`}>
+                                {b.isMeal ? <Utensils size={14} className="text-indigo-400" /> : <Coffee size={14} className="text-amber-400" />}
                               </div>
-                              <span className="text-[8px] font-bold opacity-60 uppercase tracking-widest">{b.isMeal ? `REPAS (${b.location})` : 'CAFÉ'}</span>
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black">{b.start} - {b.end}</span>
+                                  {b.isMeal && b.duration < 30 && (
+                                    <div className="flex items-center gap-1 text-amber-500" title="Moins de 30 min">
+                                      <AlertTriangle size={10} />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[8px] font-bold opacity-60 uppercase tracking-widest">{b.isMeal ? `REPAS (${b.location})` : 'CAFÉ'}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => startEditingBreakInEditModal(b)} className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors"><Edit size={14} /></button>
+                              <button onClick={() => removeBreakFromEditingShift(b.id)} className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"><Trash2 size={14} /></button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => startEditingBreakInEditModal(b)} className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors"><Edit size={14} /></button>
-                            <button onClick={() => removeBreakFromEditingShift(b.id)} className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"><Trash2 size={14} /></button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {!tempBreak.isActive ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <button 
-                        onClick={() => { setEditingBreakId(null); setTempBreak({ ...tempBreak, isActive: true, type: 'cafe', duration: 15, start: '10:00' }); }}
-                        className={`flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed text-[10px] font-black uppercase tracking-widest transition-all ${darkMode ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-50'}`}
-                      >
-                        <Coffee size={14} /> + PAUSE CAFÉ
-                      </button>
-                      <button 
-                        onClick={() => { setEditingBreakId(null); setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 45, start: '12:00' }); }}
-                        className={`flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed text-[10px] font-black uppercase tracking-widest transition-all ${darkMode ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-50'}`}
-                      >
-                        <Utensils size={14} /> + COUPURE REPAS
-                      </button>
-                    </div>
-                  ) : (
-                    <div className={`p-5 rounded-2xl border space-y-5 animate-slideUp ${darkMode ? 'bg-indigo-500/5 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'}`}>
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">{editingBreakId ? 'Modifier' : 'Ajouter'} {tempBreak.type === 'cafe' ? 'Pause Café' : 'Coupure Repas'}</span>
-                        <button onClick={() => { setTempBreak({ ...tempBreak, isActive: false }); setEditingBreakId(null); }} className="p-1"><X size={14} /></button>
+                        ))}
                       </div>
+                    )}
 
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Début</label>
-                          <input 
-                            type="time" 
-                            className={`bg-transparent font-black text-indigo-500 outline-none text-right cursor-pointer`} 
-                            value={tempBreak.start} 
-                            onChange={e => setTempBreak({ ...tempBreak, start: e.target.value })} 
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                            <span>Durée : {tempBreak.duration} min</span>
-                            <span className="text-indigo-500">Fin : {calculateEndTimeFromDuration(tempBreak.start, tempBreak.duration)}</span>
-                          </div>
-                          <input 
-                            type="range" 
-                            min="1" 
-                            max="120" 
-                            className="w-full h-1.5 bg-indigo-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
-                            value={tempBreak.duration} 
-                            onChange={e => setTempBreak({ ...tempBreak, duration: parseInt(e.target.value) })} 
-                          />
-                        </div>
-
-                        {tempBreak.type === 'repas' && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <button 
-                              onClick={() => setTempBreak({ ...tempBreak, location: 'Entreprise' })}
-                              className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border text-[8px] font-black uppercase transition-all ${tempBreak.location === 'Entreprise' ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : (darkMode ? 'border-white/5 text-slate-400' : 'border-slate-200 text-slate-500')}`}
-                            >
-                              <Building2 size={12} /> Entreprise
-                            </button>
-                            <button 
-                              onClick={() => setTempBreak({ ...tempBreak, location: 'Extérieur' })}
-                              className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border text-[8px] font-black uppercase transition-all ${tempBreak.location === 'Extérieur' ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : (darkMode ? 'border-white/5 text-slate-400' : 'border-slate-200 text-slate-500')}`}
-                            >
-                              <MapPin size={12} /> Extérieur
-                            </button>
-                          </div>
-                        )}
-
+                    {!tempBreak.isActive ? (
+                      <div className="grid grid-cols-2 gap-3">
                         <button 
-                          onClick={addOrUpdateBreakInEditingShift}
-                          className="w-full py-3 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+                          onClick={() => { setEditingBreakId(null); setTempBreak({ ...tempBreak, isActive: true, type: 'cafe', duration: 15, start: '10:00' }); }}
+                          className={`flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed text-[10px] font-black uppercase tracking-widest transition-all ${darkMode ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-50'}`}
                         >
-                          <PlusCircle size={14} /> {editingBreakId ? 'Mettre à jour la pause' : 'Ajouter cette pause'}
+                          <Coffee size={14} /> + PAUSE CAFÉ
+                        </button>
+                        <button 
+                          onClick={() => { setEditingBreakId(null); setTempBreak({ ...tempBreak, isActive: true, type: 'repas', duration: 45, start: '12:00' }); }}
+                          className={`flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed text-[10px] font-black uppercase tracking-widest transition-all ${darkMode ? 'border-white/10 hover:bg-white/5' : 'border-slate-200 hover:bg-slate-50'}`}
+                        >
+                          <Utensils size={14} /> + COUPURE REPAS
                         </button>
                       </div>
-                    </div>
-                  )}
-               </div>
+                    ) : (
+                      <div className={`p-5 rounded-2xl border space-y-5 animate-slideUp ${darkMode ? 'bg-indigo-500/5 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'}`}>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">{editingBreakId ? 'Modifier' : 'Ajouter'} {tempBreak.type === 'cafe' ? 'Pause Café' : 'Coupure Repas'}</span>
+                          <button onClick={() => { setTempBreak({ ...tempBreak, isActive: false }); setEditingBreakId(null); }} className="p-1"><X size={14} /></button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Début</label>
+                            <input 
+                              type="time" 
+                              className={`bg-transparent font-black text-indigo-500 outline-none text-right cursor-pointer`} 
+                              value={tempBreak.start} 
+                              onChange={e => setTempBreak({ ...tempBreak, start: e.target.value })} 
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                              <span>Durée : {tempBreak.duration} min</span>
+                              <span className="text-indigo-500">Fin : {calculateEndTimeFromDuration(tempBreak.start, tempBreak.duration)}</span>
+                            </div>
+                            <input 
+                              type="range" 
+                              min="1" 
+                              max="120" 
+                              className="w-full h-1.5 bg-indigo-500/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
+                              value={tempBreak.duration} 
+                              onChange={e => setTempBreak({ ...tempBreak, duration: parseInt(e.target.value) })} 
+                            />
+                          </div>
+
+                          {tempBreak.type === 'repas' && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <button 
+                                onClick={() => setTempBreak({ ...tempBreak, location: 'Entreprise' })}
+                                className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border text-[8px] font-black uppercase transition-all ${tempBreak.location === 'Entreprise' ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : (darkMode ? 'border-white/5 text-slate-400' : 'border-slate-200 text-slate-500')}`}
+                              >
+                                <Building2 size={12} /> Entreprise
+                              </button>
+                              <button 
+                                onClick={() => setTempBreak({ ...tempBreak, location: 'Extérieur' })}
+                                className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border text-[8px] font-black uppercase transition-all ${tempBreak.location === 'Extérieur' ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : (darkMode ? 'border-white/5 text-slate-400' : 'border-slate-200 text-slate-500')}`}
+                              >
+                                <MapPin size={12} /> Extérieur
+                              </button>
+                            </div>
+                          )}
+
+                          <button 
+                            onClick={addOrUpdateBreakInEditingShift}
+                            className="w-full py-3 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+                          >
+                            <PlusCircle size={14} /> {editingBreakId ? 'Mettre à jour la pause' : 'Ajouter cette pause'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                 </div>
+               )}
 
                <div className="space-y-3">
                  <button 

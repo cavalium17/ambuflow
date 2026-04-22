@@ -55,6 +55,7 @@ import PlanningTab from './components/PlanningTab';
 import PaieTab from './components/PaieTab';
 import ProfileTab from './components/ProfileTab';
 import Navigation from './components/Navigation';
+import NotificationHistory from './components/NotificationHistory';
 import PushNotification from './components/PushNotification';
 import DailyRecap from './components/DailyRecap';
 import Onboarding from './components/Onboarding';
@@ -223,6 +224,23 @@ const isSundayOrHoliday = (dateStr: string) => {
   return holidays.includes(dateStr);
 };
 
+const sanitizeData = (data: any): any => {
+  if (Array.isArray(data)) {
+    return data.map(sanitizeData);
+  }
+  if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: any = {};
+    Object.keys(data).forEach(key => {
+      const val = data[key];
+      if (val !== undefined) {
+        cleaned[key] = sanitizeData(val);
+      }
+    });
+    return cleaned;
+  }
+  return data;
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -235,15 +253,52 @@ const App: React.FC = () => {
   const [gainsCarouselIndex, setGainsCarouselIndex] = useState(0);
   const [showDailyRecap, setShowDailyRecap] = useState(false);
   const [lastFinishedShift, setLastFinishedShift] = useState<Shift | null>(null);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   
   const [hasNewReport, setHasNewReport] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  const [notifications, setNotifications] = useState<PushType[]>(() => {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const saved = localStorage.getItem('ambuflow_notifications');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed
+          .map((n: any) => ({ ...n, timestamp: new Date(n.timestamp) }))
+          .filter((n: any) => {
+            const d = n.timestamp;
+            const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            return dStr === todayStr;
+          });
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  });
   
-  const getLocalDateString = (date: Date) => {
+  const getLocalDateString = useCallback((date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
-  };
+  }, []);
+
+  // Use a ref to track the last reset day to avoid unnecessary processing
+  const lastResetDayRef = useRef(getLocalDateString(new Date()));
+
+  useEffect(() => {
+    const todayStr = getLocalDateString(currentTime);
+    if (todayStr !== lastResetDayRef.current) {
+      setNotifications(prev => {
+        const filtered = prev.filter(n => getLocalDateString(n.timestamp) === todayStr);
+        return filtered.length !== prev.length ? filtered : prev;
+      });
+      lastResetDayRef.current = todayStr;
+    }
+  }, [currentTime, getLocalDateString]);
 
   const [userStats, setUserStats] = useState<UserStats>(() => {
     const saved = localStorage.getItem('ambuflow_user_stats');
@@ -255,7 +310,6 @@ const App: React.FC = () => {
     };
   });
 
-  const [notifications, setNotifications] = useState<PushType[]>([]);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [currentGeoPosition, setCurrentGeoPosition] = useState<{ latitude: number; longitude: number; } | null>(null);
   const [shifts, setShifts] = useState<Shift[]>(() => {
@@ -349,7 +403,6 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('ambuflow_break_end');
     return saved ? new Date(saved) : null;
   });
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [nextAutoStart, setNextAutoStart] = useState<Date | null>(() => {
     const saved = localStorage.getItem('ambuflow_next_autostart');
     return saved ? new Date(saved) : null;
@@ -423,9 +476,32 @@ const App: React.FC = () => {
     if (config.overtimeMode !== undefined) setOvertimeMode(prev => prev !== config.overtimeMode ? config.overtimeMode : prev);
     if (config.payRateMode !== undefined) setPayRateMode(prev => prev !== config.payRateMode ? config.payRateMode : prev);
     if (config.supplementaryTaskType !== undefined) setSupplementaryTaskType(prev => prev !== config.supplementaryTaskType ? config.supplementaryTaskType : prev);
+    if (config.status !== undefined) setStatus(prev => prev !== config.status ? config.status : prev);
+    if (config.activeShiftId !== undefined) setActiveShiftId(prev => prev !== config.activeShiftId ? config.activeShiftId : prev);
+    if (config.scheduledShiftId !== undefined) setScheduledShiftId(prev => prev !== config.scheduledShiftId ? config.scheduledShiftId : prev);
+    if (config.nextAutoStart !== undefined) setNextAutoStart(config.nextAutoStart ? new Date(config.nextAutoStart) : null);
+    if (config.breakStartDateTime !== undefined) setBreakStartDateTime(config.breakStartDateTime ? new Date(config.breakStartDateTime) : null);
+    if (config.breakEndTimeActual !== undefined) setBreakEndTimeActual(config.breakEndTimeActual ? new Date(config.breakEndTimeActual) : null);
     if (config.shifts !== undefined) setShifts(prev => JSON.stringify(prev) !== JSON.stringify(config.shifts) ? config.shifts : prev);
     if (config.logs !== undefined) setLogs(prev => JSON.stringify(prev) !== JSON.stringify(config.logs) ? config.logs : prev);
-  }, []);
+    if (config.notifications !== undefined) setNotifications(prev => {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      
+      const parsedNotifications = config.notifications
+        .map((n: any) => ({
+          ...n,
+          timestamp: n.timestamp && n.timestamp.toDate ? n.timestamp.toDate() : (n.timestamp ? new Date(n.timestamp) : new Date())
+        }))
+        .filter((n: any) => {
+          const d = n.timestamp;
+          const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          return dStr === todayStr;
+        });
+        
+      return JSON.stringify(prev) !== JSON.stringify(parsedNotifications) ? parsedNotifications : prev;
+    });
+  }, [setNotifications]);
 
   // Listen for initial mount to apply local config (important for guests and fast-loading)
   useEffect(() => {
@@ -583,6 +659,18 @@ const App: React.FC = () => {
       overtimeMode,
       payRateMode,
       supplementaryTaskType,
+      status,
+      activeShiftId,
+      scheduledShiftId,
+      nextAutoStart: nextAutoStart?.toISOString() || null,
+      shifts,
+      logs,
+      breakStartDateTime: breakStartDateTime?.toISOString() || null,
+      breakEndTimeActual: breakEndTimeActual?.toISOString() || null,
+      notifications: notifications.map(n => ({
+        ...n,
+        timestamp: n.timestamp instanceof Date ? n.timestamp.toISOString() : n.timestamp
+      })),
       updatedAt: new Date().toISOString()
     };
     
@@ -596,7 +684,8 @@ const App: React.FC = () => {
 
     try {
       isSavingRef.current = true;
-      await setDoc(doc(db, 'users', user.uid), config, { merge: true });
+      const sanitizedConfig = sanitizeData(config);
+      await setDoc(doc(db, 'users', user.uid), sanitizedConfig, { merge: true });
     } catch (error) {
       if (error instanceof Error && error.message.includes("aborted")) {
         console.warn("Firestore write aborted (expected during rapid updates)");
@@ -612,10 +701,10 @@ const App: React.FC = () => {
     if (user || isGuest) {
       const timeout = setTimeout(() => {
         saveConfig();
-      }, 1000); // Debounce saves by 1 second
+      }, 2000); // Increased debounce to 2 seconds for operational states
       return () => clearTimeout(timeout);
     }
-  }, [user, isGuest, saveConfig]);
+  }, [user, isGuest, saveConfig, status, activeShiftId, scheduledShiftId, nextAutoStart, shifts, logs, breakStartDateTime, breakEndTimeActual, notifications]);
 
   const handleOnboardingComplete = useCallback((profile: Partial<UserProfile>) => {
     if (profile.firstName) setFirstName(profile.firstName);
@@ -851,16 +940,21 @@ const App: React.FC = () => {
 
   const addLog = useCallback((action: string, type: ActivityLog['type']) => {
     const now = currentTime;
-    let locationInfo: string | undefined = undefined;
+    let locationInfo: string | null = null;
     if (autoGeo && currentGeoPosition) {
       locationInfo = `Lat: ${currentGeoPosition.latitude.toFixed(5)}, Lng: ${currentGeoPosition.longitude.toFixed(5)}`;
     }
-    const newLog: ActivityLog = { id: Math.random().toString(36).substr(2, 9), action, time: now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), timestamp: now, location: locationInfo, type };
-    setLogs(prev => [newLog, ...prev]);
+    const newLog: ActivityLog = { id: Math.random().toString(36).substr(2, 9), action, time: now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), timestamp: now, location: locationInfo || undefined, type };
+    // We use locationInfo || undefined to respect the type, but sanitizeData will handle it.
+    // Actually, let's keep it null for Firestore safety if we weren't sanitizing, 
+    // but with sanitizeData, undefined will be dropped.
+    // Let's use a cleaner approach:
+    const finalLog = sanitizeData(newLog);
+    setLogs(prev => [finalLog, ...prev]);
   }, [currentTime, autoGeo, currentGeoPosition]);
 
-  const handleStartService = useCallback((idToUse?: string | null) => {
-    const now = currentTime;
+  const handleStartService = useCallback((idToUse?: string | null, customStartTime?: Date) => {
+    const now = customStartTime || currentTime;
     const todayStr = getLocalDateString(now);
     const actualStartTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const preciseStart = now.toISOString();
@@ -1152,7 +1246,7 @@ const App: React.FC = () => {
       // 2. Reset Firestore if user is not a guest
       if (user && user.uid !== 'local_user') {
         // Clear user document
-        await setDoc(doc(db, 'users', user.uid), initialData);
+        await setDoc(doc(db, 'users', user.uid), sanitizeData(initialData));
         
         // Clear all shifts for this user
         const shiftsQuery = query(collection(db, 'shifts'), where('userId', '==', user.uid));
@@ -1270,7 +1364,7 @@ const App: React.FC = () => {
         setNextAutoStart(null);
         setScheduledShiftId(null);
       } else {
-        handleStartService(scheduledShiftId);
+        handleStartService(scheduledShiftId, nextAutoStart);
       }
     } else if (status !== ServiceStatus.OFF && nextAutoStart && currentTime >= nextAutoStart) {
       setNextAutoStart(null);
@@ -1299,8 +1393,9 @@ const App: React.FC = () => {
     if (breakEndTimeActual) localStorage.setItem('ambuflow_break_end', breakEndTimeActual.toISOString());
     else localStorage.removeItem('ambuflow_break_end');
 
+    localStorage.setItem('ambuflow_notifications', JSON.stringify(notifications));
     localStorage.setItem('ambuflow_user_stats', JSON.stringify(userStats));
-  }, [status, logs, activeShiftId, scheduledShiftId, shifts, nextAutoStart, breakStartDateTime, breakEndTimeActual, userStats]);
+  }, [status, logs, activeShiftId, scheduledShiftId, shifts, nextAutoStart, breakStartDateTime, breakEndTimeActual, userStats, notifications]);
 
   // Logique AFGSU
   const afgsuStatus = useMemo(() => {
@@ -1398,7 +1493,8 @@ const App: React.FC = () => {
     if (activeShift.breaks) {
       activeShift.breaks.forEach(b => { 
         if (b.end !== '--:--' && b.id !== lastBreak?.id) {
-          diffMs -= (b.duration * 60000); 
+          const bDur = Number(b.duration) || 0;
+          diffMs -= (bDur * 60000); 
         }
       });
     }
@@ -1411,7 +1507,7 @@ const App: React.FC = () => {
 
   const calculateEffectiveMinutes = useCallback((shift: Shift) => {
     if (shift.start === '--:--') return 0;
-    const [h1, m1] = shift.start.split(':').map(Number);
+    const [h1, m1] = shift.start.split(':').map(v => parseInt(v, 10) || 0);
     let endH, endM;
     
     const isCurrentlyInBreak = shift.id === activeShiftId && status === ServiceStatus.BREAK;
@@ -1419,11 +1515,15 @@ const App: React.FC = () => {
       ? shift.breaks[shift.breaks.length - 1] 
       : null;
 
-    if (shift.end !== '--:--') {
-      [endH, endM] = shift.end.split(':').map(Number);
+    if (shift.end !== '--:--' && shift.end !== '') {
+      const [h2, m2] = shift.end.split(':').map(v => parseInt(v, 10) || 0);
+      endH = h2;
+      endM = m2;
     } else if (shift.id === activeShiftId) {
       if (isCurrentlyInBreak && lastBreak) {
-        [endH, endM] = lastBreak.start.split(':').map(Number);
+        const [hb, mb] = lastBreak.start.split(':').map(v => parseInt(v, 10) || 0);
+        endH = hb;
+        endM = mb;
       } else {
         endH = currentTime.getHours();
         endM = currentTime.getMinutes();
@@ -1431,15 +1531,20 @@ const App: React.FC = () => {
     } else {
       return 0;
     }
+
+    const validH1 = isNaN(h1) ? 0 : h1;
+    const validM1 = isNaN(m1) ? 0 : m1;
+    const validEndH = isNaN(endH) ? 0 : endH;
+    const validEndM = isNaN(endM) ? 0 : endM;
     
-    let amp = (endH * 60 + endM) - (h1 * 60 + m1);
+    let amp = (validEndH * 60 + validEndM) - (validH1 * 60 + validM1);
     if (amp < 0) amp += 1440;
-    let eff = amp;
+    let eff = isNaN(amp) ? 0 : amp;
     
     if (shift.breaks) {
       shift.breaks.forEach(b => { 
         if (b.end !== '--:--' && b.id !== lastBreak?.id) {
-          eff -= b.duration; 
+          eff -= Number(b.duration) || 0; 
         }
       });
     }
@@ -1557,10 +1662,12 @@ const App: React.FC = () => {
       if (s.isLeave || s.vehicle === 'CONGÉ') return; // Pas de gains ni d'amplitude pour les congés
       
       if (s.start !== '--:--') {
-        const [h1, m1] = s.start.split(':').map(Number);
+        const [h1, m1] = s.start.split(':').map(v => parseInt(v, 10) || 0);
         let endH, endM;
-        if (s.end !== '--:--') {
-          [endH, endM] = s.end.split(':').map(Number);
+        if (s.end !== '--:--' && s.end !== '') {
+          const [h2, m2] = s.end.split(':').map(v => parseInt(v, 10) || 0);
+          endH = h2;
+          endM = m2;
         } else if (s.id === activeShiftId) {
           if (status === ServiceStatus.BREAK && breakStartDateTime) {
             endH = breakStartDateTime.getHours();
@@ -1573,11 +1680,16 @@ const App: React.FC = () => {
           return;
         }
 
-        const startMin = h1 * 60 + m1;
-        const endMin = endH * 60 + endM;
+        const validH1 = isNaN(h1) ? 0 : h1;
+        const validM1 = isNaN(m1) ? 0 : m1;
+        const validEndH = isNaN(endH) ? 0 : endH;
+        const validEndM = isNaN(endM) ? 0 : endM;
+
+        const startMin = validH1 * 60 + validM1;
+        const endMin = validEndH * 60 + validEndM;
         let amp = endMin - startMin;
         if (amp < 0) amp += 1440;
-        totalAmplitudeMin += amp;
+        totalAmplitudeMin += isNaN(amp) ? 0 : amp;
         
         const effective = calculateEffectiveMinutes(s);
         totalEffectiveMin += effective;
@@ -1640,10 +1752,14 @@ const App: React.FC = () => {
       periodShifts.forEach(s => {
         if (s.isLeave || s.vehicle === 'CONGÉ') return;
         if (s.start !== '--:--') {
-          const [h1, m1] = s.start.split(':').map(Number);
+          const sParts = s.start.split(':');
+          const h1 = parseInt(sParts[0], 10) || 0;
+          const m1 = parseInt(sParts[1], 10) || 0;
           let endH, endM;
-          if (s.end !== '--:--') {
-            [endH, endM] = s.end.split(':').map(Number);
+          if (s.end !== '--:--' && s.end !== '') {
+            const eParts = s.end.split(':');
+            endH = parseInt(eParts[0], 10) || 0;
+            endM = parseInt(eParts[1], 10) || 0;
           } else if (s.id === activeShiftId) {
             if (status === ServiceStatus.BREAK && breakStartDateTime) {
               endH = breakStartDateTime.getHours();
@@ -1995,7 +2111,9 @@ const App: React.FC = () => {
                         : (elapsedBreakSeconds >= MAX_BREAK_DURATION 
                            ? 'ALERTE' 
                            : (elapsedBreakSeconds < minBreakDuration ? 'Avant la reprise' : 'Avant Maximum'))) 
-                     : (status === ServiceStatus.OFF ? (isTodayFinished ? 'Total Travaillé' : 'Heure actuelle') : 'Compteur journalier')}
+                     : (status === ServiceStatus.OFF 
+                        ? (nextAutoStart && scheduledShiftId ? 'Prise de poste dans' : (isTodayFinished ? 'Total Travaillé' : 'Heure actuelle'))
+                        : 'Compteur journalier')}
                  </p>
                  <h1 className={`font-black tabular-nums tracking-tighter leading-none drop-shadow-2xl ${isBreakFinished ? 'text-rose-500 animate-blink-red text-4xl py-4' : 'text-7xl'}`}>
                    {status === ServiceStatus.BREAK ? (() => { 
@@ -2018,16 +2136,23 @@ const App: React.FC = () => {
                      const m = Math.floor(timeLeft / 60);
                      const s = timeLeft % 60;
                      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                   })() : status === ServiceStatus.OFF ? (isTodayFinished ? (() => {
-                     const [h1, m1] = todayShift!.start.split(':').map(Number);
-                     const [h2, m2] = todayShift!.end.split(':').map(Number);
+                   })() : status === ServiceStatus.OFF ? (nextAutoStart && scheduledShiftId ? nextCountdown : (isTodayFinished ? (() => {
+                     const sParts = todayShift!.start.split(':');
+                     const eParts = todayShift!.end.split(':');
+                     if (sParts.length < 2 || eParts.length < 2) return "00:00";
+                     const h1 = parseInt(sParts[0], 10);
+                     const m1 = parseInt(sParts[1], 10);
+                     const h2 = parseInt(eParts[0], 10);
+                     const m2 = parseInt(eParts[1], 10);
+                     if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return "00:00";
                      let dur = (h2 * 60 + m2) - (h1 * 60 + m1);
                      if (dur < 0) dur += 1440;
-                     if (todayShift!.breaks) todayShift!.breaks.forEach(b => dur -= b.duration);
-                     const h = Math.floor(dur / 60);
-                     const m = dur % 60;
+                     if (todayShift!.breaks) todayShift!.breaks.forEach(b => dur -= (Number(b.duration) || 0));
+                     const finalDur = Math.max(0, dur);
+                     const h = Math.floor(finalDur / 60);
+                     const m = finalDur % 60;
                      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                   })() : currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })) : getDuration()}
+                   })() : currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))) : getDuration()}
                  </h1>
               </div>
             </div>
@@ -2461,11 +2586,22 @@ const App: React.FC = () => {
                     </div>
                     <div 
                       onClick={() => {
-                        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                        setShowNotificationPanel(true);
                       }}
-                      className={`p-3 rounded-2xl relative ${effectiveDarkMode ? 'bg-slate-800/50' : 'bg-slate-100/50'} backdrop-blur-md cursor-pointer`}
+                      className={`p-3 rounded-2xl relative border ${effectiveDarkMode ? 'bg-slate-800/50 border-white/10' : 'bg-slate-100/50 border-slate-200'} backdrop-blur-md cursor-pointer group hover:scale-105 active:scale-95 transition-all`}
                     >
-                      <Bell size={24} className={status !== ServiceStatus.OFF || nextAutoStart ? 'animate-bounce text-indigo-500' : ''} />
+                      <motion.div
+                        animate={unreadCount > 0 ? {
+                          rotate: [0, -10, 10, -10, 10, 0],
+                        } : {}}
+                        transition={unreadCount > 0 ? {
+                          duration: 0.5,
+                          repeat: Infinity,
+                          repeatDelay: 2
+                        } : {}}
+                      >
+                        <Bell size={24} className={unreadCount > 0 ? 'text-indigo-500' : effectiveDarkMode ? 'text-slate-400' : 'text-slate-600'} />
+                      </motion.div>
                       {unreadCount > 0 && (
                         <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center border-2 border-slate-950">
                            <span className="text-[8px] font-black text-white">{unreadCount}</span>
@@ -2476,6 +2612,26 @@ const App: React.FC = () => {
                 </header>
               );
             })()}
+            <AnimatePresence>
+              {showNotificationPanel && (
+                <NotificationHistory 
+                  notifications={notifications}
+                  onClose={() => setShowNotificationPanel(false)}
+                  onClear={() => {
+                    setNotifications([]);
+                    setShowNotificationPanel(false);
+                  }}
+                  onRead={(id) => {
+                    if (id === 'all') {
+                      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                    } else {
+                      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+                    }
+                  }}
+                  darkMode={effectiveDarkMode}
+                />
+              )}
+            </AnimatePresence>
             <main className="flex-1 max-w-xl mx-auto w-full">
               {activeTab === 'home' && renderHome()}
               {activeTab === 'planning' && <PlanningTab darkMode={effectiveDarkMode} status={status} setStatus={setStatus} onAutoStartService={handleAutoStartService} onEndServiceSilently={stopServiceSilently} appCurrentTime={currentTime} shifts={shifts} setShifts={setShifts} weekendDays={weekendDays} setWeekendDays={setWeekendDays} activeShiftId={activeShiftId} setActiveShiftId={setActiveShiftId} availableVehicles={['ASSU', 'AMBU', 'VSL']} hourlyRate={effectiveHourlyRate} setActiveTab={setActiveTab} workRegime={workRegime} cpCalculationMode={cpCalculationMode as '25' | '30'} modulationWeeks={modulationWeeks} modulationStartDate={modulationStartDate} contractStartDate={contractStartDate} leaveBalances={leaveBalances} initialCpBalance={initialCpBalance} setInitialCpBalance={setInitialCpBalance} />}

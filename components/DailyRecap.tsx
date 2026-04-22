@@ -62,26 +62,36 @@ const DailyRecap: React.FC<DailyRecapProps> = ({ shift, userStats, hourlyRate, o
   const calculateStats = () => {
     if (!shift.start || shift.end === '--:--') return null;
 
-    const [h1, m1] = (shift.start || "00:00").split(':').map(v => parseInt(v) || 0);
-    const [h2, m2] = (shift.end || "00:00").split(':').map(v => parseInt(v) || 0);
+    const [h1, m1] = (shift.start || "00:00").split(':').map(v => parseInt(v, 10) || 0);
+    const [h2, m2] = (shift.end || "00:00").split(':').map(v => parseInt(v, 10) || 0);
     
-    const startMin = h1 * 60 + m1;
-    const endMin = h2 * 60 + m2;
+    // Safety check for NaN
+    const validH1 = isNaN(h1) ? 0 : h1;
+    const validM1 = isNaN(m1) ? 0 : m1;
+    const validH2 = isNaN(h2) ? 0 : h2;
+    const validM2 = isNaN(m2) ? 0 : m2;
+
+    const startMin = validH1 * 60 + validM1;
+    const endMin = validH2 * 60 + validM2;
     let ampMin = endMin - startMin;
     if (ampMin < 0) ampMin += 1440;
 
     let breakMin = 0;
     const hasExternalBreak = shift.breaks?.some(b => b.location === 'Extérieur');
     shift.breaks?.forEach(b => {
-      breakMin += b.duration;
+      breakMin += Number(b.duration) || 0;
     });
 
-    const effMin = Math.max(0, ampMin - breakMin);
+    const effMin = Math.max(0, isNaN(ampMin) ? 0 : ampMin - (isNaN(breakMin) ? 0 : breakMin));
     const hourly = parseFloat(hourlyRate) || 11.65;
     
     // Nouvelles indemnités
     let totalAllowances = 0;
     
+    // 1. Repas (15.54€)
+    const safeAmpMin = isNaN(ampMin) ? 0 : ampMin;
+    const safeEffMin = isNaN(effMin) ? 0 : effMin;
+
     // 1. Repas (15.54€)
     if (startMin <= 660 && endMin >= 870 && hasExternalBreak) {
       totalAllowances += 15.54;
@@ -105,11 +115,11 @@ const DailyRecap: React.FC<DailyRecapProps> = ({ shift, userStats, hourlyRate, o
       totalAllowances += 23.90;
     }
 
-    const gainsTotal = (effMin / 60) * hourly + totalAllowances;
+    const gainsTotal = (safeEffMin / 60) * hourly + totalAllowances;
 
     return {
-      amplitude: `${Math.floor(ampMin / 60)}h ${ampMin % 60}m`,
-      effective: `${Math.floor(effMin / 60)}h ${effMin % 60}m`,
+      amplitude: `${Math.floor(safeAmpMin / 60)}h ${safeAmpMin % 60}m`,
+      effective: `${Math.floor(safeEffMin / 60)}h ${safeEffMin % 60}m`,
       allowanceAmount: totalAllowances.toFixed(2),
       gains: gainsTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     };

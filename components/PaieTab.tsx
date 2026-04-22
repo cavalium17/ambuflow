@@ -346,11 +346,17 @@ const PaieTab: React.FC<PaieTabProps> = ({
 
     if (shift.end === '--:--') return null;
 
-    const [h1, m1] = (shift.start || "00:00").split(':').map(v => parseInt(v) || 0);
-    const [h2, m2] = (shift.end || "00:00").split(':').map(v => parseInt(v) || 0);
+    const [h1, m1] = (shift.start || "00:00").split(':').map(v => parseInt(v, 10) || 0);
+    const [h2, m2] = (shift.end || "00:00").split(':').map(v => parseInt(v, 10) || 0);
     
-    const startMin = h1 * 60 + m1;
-    const endMin = h2 * 60 + m2;
+    // Safety check for NaN
+    const validH1 = isNaN(h1) ? 0 : h1;
+    const validM1 = isNaN(m1) ? 0 : m1;
+    const validH2 = isNaN(h2) ? 0 : h2;
+    const validM2 = isNaN(m2) ? 0 : m2;
+
+    const startMin = validH1 * 60 + validM1;
+    const endMin = validH2 * 60 + validM2;
     let amplitudeMin = endMin - startMin;
     if (amplitudeMin < 0) amplitudeMin += 24 * 60;
 
@@ -359,13 +365,16 @@ const PaieTab: React.FC<PaieTabProps> = ({
 
     if (shift.breaks) {
       shift.breaks.forEach(b => {
-        totalBreaksMin += b.duration;
+        totalBreaksMin += Number(b.duration) || 0;
       });
     }
 
-    const effectiveMin = Math.max(0, amplitudeMin - totalBreaksMin);
+    const effectiveMin = Math.max(0, isNaN(amplitudeMin) ? 0 : amplitudeMin - (isNaN(totalBreaksMin) ? 0 : totalBreaksMin));
+    const safeAmplitudeMin = isNaN(amplitudeMin) ? 0 : amplitudeMin;
+    const safeEffectiveMin = isNaN(effectiveMin) ? 0 : effectiveMin;
+
     const remunerationCoefficient = payRateMode === '90_percent' ? 0.9 : 1.0;
-    const paidMin = effectiveMin * remunerationCoefficient;
+    const paidMin = safeEffectiveMin * remunerationCoefficient;
     const effectiveHours = paidMin / 60;
     
     const baseGrossEarnings = effectiveHours * parsedHourlyRate;
@@ -406,9 +415,9 @@ const PaieTab: React.FC<PaieTabProps> = ({
     const netEarnings = (baseGrossEarnings * NET_COEFFICIENT) + totalAllowances;
 
     return {
-      amplitude: `${Math.floor(amplitudeMin / 60)}h ${amplitudeMin % 60}m`,
-      effective: `${Math.floor(effectiveMin / 60)}h ${effectiveMin % 60}m`,
-      effectiveMin,
+      amplitude: `${Math.floor(safeAmplitudeMin / 60)}h ${safeAmplitudeMin % 60}m`,
+      effective: `${Math.floor(safeEffectiveMin / 60)}h ${safeEffectiveMin % 60}m`,
+      effectiveMin: safeEffectiveMin,
       totalAllowances,
       allowanceLabels,
       grossEarnings,

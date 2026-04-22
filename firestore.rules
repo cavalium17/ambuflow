@@ -31,32 +31,18 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields([
-        'userName', 'firstName', 'lastName', 'jobTitle', 'contractType', 
-        'hoursBase', 'contractStartDate', 'autoGeo', 'onboarded', 
-        'shifts', 'logs', 'role', 'qualifications', 'entryDate', 'workRegime',
-        'monthlyHours', 'leaveCalculation',
-        'updatedAt', 'hasDea', 'hasAux', 'hasTaxiCard', 'profileImage',
-        'hourlyRate', 'companyName', 'companyCity', 'primaryGraduationDate', 'deaDate',
-        'auxDate', 'taxiDate', 'taxiCardExpiryDate', 'taxiFpcDate',
-        'afgsuDate', 'medicalExpiryDate', 'cpCalculationMode',
-        'modulationStartDate', 'modulationWeeks', 'initialCpBalance',
-        'weeklyContractHours', 'overtimeMode', 'payRateMode',
-        'pushEnabled', 'followSystemTheme', 'customHours', 'weekendDays',
-        'email', 'createdAt', 'roles', 'primaryRole',
-        'activeShiftId', 'scheduledShiftId', 'supplementaryTaskType'
-      ]) &&
-      (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
-      (!('firstName' in data) || (data.firstName is string && data.firstName.size() < 100)) &&
-      (!('lastName' in data) || (data.lastName is string && data.lastName.size() < 100)) &&
-      (!('companyName' in data) || (data.companyName is string && data.companyName.size() < 200)) &&
-      (!('jobTitle' in data) || (data.jobTitle is string && data.jobTitle.size() < 100)) &&
-      (!('onboarded' in data) || (data.onboarded is bool)) &&
-      (!('roles' in data) || (data.roles is list)) &&
-      (!('primaryRole' in data) || (data.primaryRole is string)) &&
-      (!('weeklyContractHours' in data) || (data.weeklyContractHours is number)) &&
-      (!('overtimeMode' in data) || (data.overtimeMode is string)) &&
-      (!('payRateMode' in data) || (data.payRateMode is string));
+      return (
+        (!('userName' in data) || (data.userName is string && data.userName.size() < 100)) &&
+        (!('firstName' in data) || (data.firstName is string && data.firstName.size() < 100)) &&
+        (!('lastName' in data) || (data.lastName is string && data.lastName.size() < 100)) &&
+        (!('companyName' in data) || (data.companyName is string && data.companyName.size() < 200)) &&
+        (!('jobTitle' in data) || (data.jobTitle is string && data.jobTitle.size() < 100)) &&
+        (!('onboarded' in data) || (data.onboarded is bool)) &&
+        (!('roles' in data) || (data.roles is list)) &&
+        (!('primaryRole' in data) || (data.primaryRole is string)) &&
+        (!('status' in data) || (data.status is string)) &&
+        (!('email' in data) || (data.email is string))
+      );
     }
 
     // ===============================================================
