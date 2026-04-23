@@ -1,6 +1,7 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import admin from 'firebase-admin';
 
+// 1. Initialisation de Firebase Admin
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
@@ -11,14 +12,14 @@ if (!admin.apps.length) {
   }
 }
 
-const db = admin.firestore();
+// FORCE LA CONNEXION À LA BASE SPÉCIFIQUE DE TA PHOTO
+// On récupère l'ID de la base que l'on voit sur ta capture écran
+const db = admin.firestore("ai-studio-bc6dd8d0-4580-4097-892c-7d8a2e1c3e27");
 
 export default async function handler(req, res) {
   try {
     const host = req.headers.host || '';
     const currentRP_ID = host.split(':')[0]; 
-
-    // VERIFIE BIEN CET ID : Il doit être identique à celui de ta photo Firebase
     const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3"; 
 
     const options = await generateRegistrationOptions({
@@ -35,16 +36,20 @@ export default async function handler(req, res) {
       },
     });
 
-    // LE FIX EST ICI : .set + merge: true
+    // Utilisation de .set pour être certain que ça ne renvoie pas NOT_FOUND
     await db.collection('users').doc(userId).set({
       currentChallenge: options.challenge,
-      lastAction: 'registration_started'
+      lastCheck: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
     return res.status(200).json(options);
 
   } catch (error) {
-    console.error('Erreur:', error);
-    return res.status(500).json({ error: 'Erreur Serveur', message: error.message });
+    console.error('Erreur technique:', error);
+    return res.status(500).json({ 
+      error: 'Erreur Serveur', 
+      message: error.message,
+      code: error.code // On affiche le code d'erreur pour mieux comprendre
+    });
   }
 }
