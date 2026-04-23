@@ -32,6 +32,53 @@
 </head>
 <body class="bg-[#030712]">
     <div id="root"></div>
+
+<div class="fixed bottom-4 right-4 z-50">
+<button onclick="createPasskey()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+  <span class="text-xl">🔑</span> Créer une passkey
+</button>
+</div>
+
+<script>
+async function createPasskey() {
+  try {
+    // 1. Récupérer les options depuis ton backend
+    const res = await fetch("/api/register");
+    const options = await res.json();
+
+    // 2. Convertir le challenge (obligatoire)
+    // SimpleWebAuthn returns base64url, atob works for base64. 
+    function base64urlToUint8Array(base64url) {
+      const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = base64.length % 4;
+      const padded = pad ? base64 + '='.repeat(4 - pad) : base64;
+      return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+    }
+
+    options.challenge = base64urlToUint8Array(options.challenge);
+    options.user.id = base64urlToUint8Array(options.user.id);
+
+    console.log("Check Permissions-Policy:", document.featurePolicy?.allowsFeature('publickey-credentials-create'));
+    
+    // 3. Créer la passkey
+    const credential = await navigator.credentials.create({
+      publicKey: options
+    });
+
+    console.log("Passkey créée :", credential);
+
+    alert("✅ Passkey créée !");
+    
+  } catch (error) {
+    console.error(error);
+    let msg = error.message;
+    if (msg.includes("not enabled") || msg.includes("Permissions Policy")) {
+      msg += "\n\n💡 ASTUCE : Les navigateurs bloquent souvent la biométrie dans les iframes. Essayez d'ouvrir l'application dans un NOUVEL ONGLET (bouton en haut à droite de l'aperçu).";
+    }
+    alert("❌ Erreur : " + msg);
+  }
+}
+</script>
 <script type="module" src="/index.tsx"></script>
 </body>
 </html>

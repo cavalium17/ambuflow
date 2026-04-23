@@ -23,7 +23,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  signInWithPopup
+  signInWithPopup,
+  signInWithCustomToken
 } from 'firebase/auth';
 import { 
   doc, 
@@ -57,19 +58,36 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
     setError(null);
 
     try {
-      // 1. Récupérer les options d'authentification depuis l'API
-      const resp = await fetch('/api/login-options');
+      // 1. Get authentication options
+      const resp = await fetch('/api/login-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email || undefined }) // Optional email hint
+      });
+      
       if (!resp.ok) throw new Error('Impossible de récupérer les options de connexion');
       
       const options = await resp.json();
 
-      // 2. Déclencher le prompt biométrique (FaceID/Fingerprint)
+      // 2. Launch startAuthentication
       const authResponse = await startAuthentication(options);
 
-      if (authResponse) {
-        // 3. Ici on enverrait normalement la réponse au serveur pour vérification
-        console.log("Passkey authenticated successfully via SimpleWebAuthn", authResponse);
+      // 3. Verify authentication on server
+      const verifyResp = await fetch('/api/verify-authentication', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authenticationResponse: authResponse })
+      });
+
+      const verification = await verifyResp.json();
+
+      if (verification.verified && verification.customToken) {
+        // 4. Sign in to Firebase with the custom token
+        await signInWithCustomToken(auth, verification.customToken);
+        console.log("Passkey login successful!");
         if (onLoginSuccess) onLoginSuccess();
+      } else {
+        throw new Error(verification.error || "La vérification du Passkey a échoué");
       }
     } catch (err: any) {
       console.error("Passkey error:", err);
@@ -212,14 +230,20 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
     setLoading(true);
     setError(null);
     try {
+      console.log("Starting Google Sign-In popup...");
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
+      console.log("Google Sign-In successful. User:", user.uid);
+      
+      // Force loading state while we perform Firestore check
+      setLoading(true);
       
       // Check if user document exists, if not initialize it
       const userDocRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
       
       if (!userDoc.exists()) {
+        console.log("User document doesn't exist, creating...");
         await setDoc(userDocRef, {
           email: user.email,
           userName: user.displayName || '',
@@ -228,10 +252,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
           updatedAt: serverTimestamp(),
           onboarded: false
         }, { merge: true });
+        console.log("User document created successfully.");
+      } else {
+        console.log("User document already exists.");
       }
       
-      if (onLoginSuccess) onLoginSuccess();
+      // We don't call onLoginSuccess here anymore as App.tsx handles it via onAuthStateChanged
+      console.log("Login sequence finished in Login component.");
     } catch (err: any) {
+      console.error("Google Auth error details:", err);
       if (err.code === 'auth/account-exists-with-different-credential') {
         setError("Un compte existe déjà avec cet email via une autre méthode de connexion (Email/Mot de passe).");
       } else if (err.code === 'auth/network-request-failed') {

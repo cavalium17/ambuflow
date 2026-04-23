@@ -270,6 +270,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isGuest, setIsGuest] = useState(() => localStorage.getItem('ambuflow_is_guest') === 'true');
+  const [showLoadingLonger, setShowLoadingLonger] = useState(false);
 
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [gainsCarouselIndex, setGainsCarouselIndex] = useState(0);
@@ -542,7 +543,8 @@ const App: React.FC = () => {
       loadingTimeoutId = setTimeout(() => {
         setAuthLoading(false);
         setConfigLoading(false);
-      }, 10000);
+        setShowLoadingLonger(true);
+      }, 8000);
 
       if (!currentUser) {
         if (loadingTimeoutId) clearTimeout(loadingTimeoutId);
@@ -560,6 +562,8 @@ const App: React.FC = () => {
       
       setUser(currentUser);
       setIsAuthReady(true);
+      setIsGuest(false);
+      localStorage.removeItem('ambuflow_is_guest');
       
       if (currentUser) {
         setAuthLoading(true);
@@ -2530,15 +2534,45 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      {isAuthReady && !authLoading && !user && !isGuest ? (
+      {(!isAuthReady || authLoading) ? (
+        <div className={`fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 ${effectiveDarkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}`}>
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-indigo-500/20 rounded-full animate-spin border-t-indigo-500" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+            </div>
+          </div>
+          <div className="space-y-2 text-center animate-pulse">
+            <h2 className="text-xl font-black uppercase tracking-[0.3em] leading-none">AmbuFlow</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initialisation sécurisée...</p>
+          </div>
+          {showLoadingLonger && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-8 px-6 text-center max-w-xs"
+            >
+              <p className="text-[9px] text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
+                La connexion avec Firebase prend plus de temps que prévu. 
+                Vérifiez votre connexion réseau ou rafraîchissez la page.
+              </p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="mt-4 px-6 py-3 bg-white border border-slate-100 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all text-slate-900"
+              >
+                Actualiser
+              </button>
+            </motion.div>
+          )}
+        </div>
+      ) : !user && !isGuest ? (
         <Login 
-          onLoginSuccess={() => setIsGuest(false)} 
           onEnterAsGuest={() => {
             setIsGuest(true);
             localStorage.setItem('ambuflow_is_guest', 'true');
           }} 
         />
-      ) : !onboarded && isAuthReady && !authLoading ? (
+      ) : !onboarded ? (
         <Onboarding onComplete={handleOnboardingComplete} userEmail={user?.email} />
       ) : (
         <div className={`min-h-screen transition-colors duration-500 font-sans pb-28 flex flex-col relative ${effectiveDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-900'}`}>

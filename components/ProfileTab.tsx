@@ -37,7 +37,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { Shift, ActivityLog, UserStats, UserRole } from '../types';
-import { storage } from '../src/firebaseConfig';
+import { storage, auth } from '../src/firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface ProfileTabProps {
@@ -173,18 +173,45 @@ export default function ProfileTab({
 }: ProfileTabProps) {
   // --- LA FONCTION DOIT ÊTRE ICI (DANS LE COMPOSANT) ---
   const handleCreatePasskey = async () => {
+    if (!window.PublicKeyCredential || !auth.currentUser) return;
+    
+    setPasskeyLoading(true);
     try {
-      const resp = await fetch('/api/register');
-      if (!resp.ok) throw new Error('Erreur lors de la récupération des options');
+      const user = auth.currentUser;
+      
+      // 1. Get registration options
+      const resp = await fetch('/api/register-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid, email: user.email })
+      });
+      
+      if (!resp.ok) {
+        const errData = await resp.json();
+        throw new Error(errData.error || 'Erreur lors de la récupération des options');
+      }
+      
       const options = await resp.json();
 
-      // startRegistration est bien importé en haut du fichier
-      const regResp = await startRegistration(options);
-
-      console.log("Passkey créée avec succès !", regResp);
-      setIsPasskeyEnabled(true);
-      alert("Passkey enregistrée sur cet appareil !");
+      // 2. Launch startRegistration
+      const registrationResponse = await startRegistration(options);
       
+      // 3. Verify registration on server
+      const verifyResp = await fetch('/api/verify-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid, registrationResponse })
+      });
+
+      const verification = await verifyResp.json();
+
+      if (verification.verified) {
+        setIsPasskeyEnabled(true);
+        console.log("Passkey registered and verified via Profile!");
+        alert("Passkey enregistrée et vérifiée sur cet appareil !");
+      } else {
+        throw new Error(verification.error || "La vérification du Passkey a échoué");
+      }
     } catch (error: any) {
       console.error("Erreur Passkey:", error);
       if (error.name === 'NotAllowedError') {
@@ -192,6 +219,8 @@ export default function ProfileTab({
       } else {
         alert("L'enregistrement a échoué : " + error.message);
       }
+    } finally {
+      setPasskeyLoading(false);
     }
   };
 

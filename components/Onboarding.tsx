@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { startRegistration } from '@simplewebauthn/browser';
 import { motion, AnimatePresence } from 'motion/react';
+import { auth } from '../src/firebaseConfig';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -68,24 +69,45 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userEmail }) => {
   }, [roles]);
 
   const registerPasskey = async () => {
-    if (!window.PublicKeyCredential) return;
+    if (!window.PublicKeyCredential || !auth.currentUser) return;
     
     setPasskeyLoading(true);
     setPasskeyError(null);
 
     try {
-      // 1. Récupérer les options depuis l'API
-      const resp = await fetch('/api/register');
-      if (!resp.ok) throw new Error('Erreur lors de la récupération des options');
+      const user = auth.currentUser;
+      
+      // 1. Get registration options
+      const resp = await fetch('/api/register-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid, email: user.email })
+      });
+      
+      if (!resp.ok) {
+        const errData = await resp.json();
+        throw new Error(errData.error || 'Erreur lors de la récupération des options');
+      }
       
       const options = await resp.json();
 
-      // 2. Lancement du processus SimpleWebAuthn
+      // 2. Launch startRegistration
       const registrationResponse = await startRegistration(options);
       
-      if (registrationResponse) {
+      // 3. Verify registration on server
+      const verifyResp = await fetch('/api/verify-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid, registrationResponse })
+      });
+
+      const verification = await verifyResp.json();
+
+      if (verification.verified) {
         setIsPasskeyEnabled(true);
-        console.log("Passkey registered via Onboarding (SimpleWebAuthn):", registrationResponse);
+        console.log("Passkey registered and verified!");
+      } else {
+        throw new Error(verification.error || "La vérification du Passkey a échoué");
       }
     } catch (err: any) {
       console.error("Onboarding Passkey error:", err);
