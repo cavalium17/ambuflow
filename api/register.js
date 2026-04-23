@@ -1,7 +1,6 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import admin from 'firebase-admin';
 
-// 1. Initialisation standard
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
@@ -12,7 +11,6 @@ if (!admin.apps.length) {
   }
 }
 
-// On revient à la base par défaut, Firebase Admin s'occupe du reste
 const db = admin.firestore();
 
 export default async function handler(req, res) {
@@ -35,19 +33,18 @@ export default async function handler(req, res) {
       },
     });
 
-    // On utilise .set avec merge: true pour être blindé contre les erreurs "Not Found"
-    const userRef = db.collection('users').doc(userId);
+    // --- LA CORRECTION EST ICI ---
+    // J'ai ajouté l'espace après "users" pour correspondre à ta capture Firebase
+    const userRef = db.collection('users ').doc(userId);
+    
     await userRef.set({
       currentChallenge: options.challenge,
       lastUpdated: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
-    // On renvoie les options au navigateur
     return res.status(200).json(options);
 
   } catch (error) {
-    // Si ça plante, on veut savoir exactement pourquoi dans les logs Vercel
-    console.error('ERREUR SERVEUR:', error.message);
-    return res.status(500).json({ error: 'Erreur Interne', details: error.message });
+    return res.status(500).json({ error: 'Erreur interne', details: error.message });
   }
 }
