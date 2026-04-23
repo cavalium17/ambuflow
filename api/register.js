@@ -1,7 +1,7 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import admin from 'firebase-admin';
 
-// 1. Initialisation de Firebase Admin
+// 1. Initialisation standard
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
@@ -12,9 +12,8 @@ if (!admin.apps.length) {
   }
 }
 
-// FORCE LA CONNEXION À LA BASE SPÉCIFIQUE DE TA PHOTO
-// On récupère l'ID de la base que l'on voit sur ta capture écran
-const db = admin.firestore("ai-studio-bc6dd8d0-4580-4097-892c-7d8a2e1c3e27");
+// On revient à la base par défaut, Firebase Admin s'occupe du reste
+const db = admin.firestore();
 
 export default async function handler(req, res) {
   try {
@@ -36,20 +35,19 @@ export default async function handler(req, res) {
       },
     });
 
-    // Utilisation de .set pour être certain que ça ne renvoie pas NOT_FOUND
-    await db.collection('users').doc(userId).set({
+    // On utilise .set avec merge: true pour être blindé contre les erreurs "Not Found"
+    const userRef = db.collection('users').doc(userId);
+    await userRef.set({
       currentChallenge: options.challenge,
-      lastCheck: admin.firestore.FieldValue.serverTimestamp()
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
+    // On renvoie les options au navigateur
     return res.status(200).json(options);
 
   } catch (error) {
-    console.error('Erreur technique:', error);
-    return res.status(500).json({ 
-      error: 'Erreur Serveur', 
-      message: error.message,
-      code: error.code // On affiche le code d'erreur pour mieux comprendre
-    });
+    // Si ça plante, on veut savoir exactement pourquoi dans les logs Vercel
+    console.error('ERREUR SERVEUR:', error.message);
+    return res.status(500).json({ error: 'Erreur Interne', details: error.message });
   }
 }
