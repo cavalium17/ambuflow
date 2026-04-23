@@ -1,19 +1,14 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import admin from 'firebase-admin';
 
-// 1. Initialisation sécurisée de Firebase Admin
+// 1. Initialisation de Firebase Admin
 if (!admin.apps.length) {
   try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      admin.initializeApp({
-        credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
-      });
-    } else {
-      // Fallback pour l'environnement AI Studio Build qui utilise ADC
-      admin.initializeApp();
-    }
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
+    });
   } catch (error) {
-    console.error('Erreur initialisation Firebase Admin:', error.message);
+    console.error('Erreur Firebase Admin:', error.message);
   }
 }
 
@@ -21,27 +16,24 @@ const db = admin.firestore();
 
 export default async function handler(req, res) {
   try {
-    // 2. Vérification de la méthode
-    if (req.method !== 'GET') {
-      return res.status(405).json({ error: 'Méthode non autorisée' });
-    }
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-    // 3. Gestion dynamique du domaine (RP_ID)
-    // Cela permet au code de fonctionner sur l'URL principale ET les URLs de test
-    const host = req.headers.host;
-    const currentRP_ID = host ? host.split(':')[0] : 'localhost'; // Récupère le domaine sans le port
+    // 2. Récupération dynamique du domaine
+    const host = req.headers.host || '';
+    const currentRP_ID = host.split(':')[0]; 
 
-    // 4. Identification de l'utilisateur (ID provenant de votre Firebase)
-    const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3"; 
-    const userEmail = "contact@exemple.com";
-    const userName = "Adrien";
+    // 3. Données utilisateur (Formatage strict pour éviter l'erreur 'replace')
+    // On s'assure que ce sont des strings pures sans espaces bizarres
+    const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3".trim(); 
+    const userEmail = "contact@exemple.com".trim();
+    const userName = "Adrien".trim();
 
-    // 5. Génération des options WebAuthn
+    // 4. Génération des options
     const options = await generateRegistrationOptions({
       rpName: 'AmbuFlow',
-      rpID: currentRP_ID, // Dynamique pour éviter l'erreur "not equal to current domain"
+      rpID: currentRP_ID,
       
-      // CORRECTIF : Conversion de l'ID en Uint8Array (pour éviter "Unexpected token A")
+      // Conversion sécurisée en Uint8Array pour le standard WebAuthn
       userID: Uint8Array.from(userId, c => c.charCodeAt(0)),
       
       userName: userEmail,
@@ -50,25 +42,22 @@ export default async function handler(req, res) {
       authenticatorSelection: {
         residentKey: 'required',
         userVerification: 'preferred',
-        authenticatorAttachment: 'platform', // Force TouchID/FaceID/Code téléphone
+        authenticatorAttachment: 'platform', 
       },
     });
 
-    // 6. SAUVEGARDE DU CHALLENGE DANS FIREBASE
-    // Étape cruciale pour que l'étape de vérification puisse fonctionner plus tard
+    // 5. Sauvegarde du challenge dans Firestore
     await db.collection('users').doc(userId).update({
-      currentChallenge: options.challenge,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      currentChallenge: options.challenge
     });
 
-    // 7. Envoi des options au frontend
     return res.status(200).json(options);
 
   } catch (error) {
-    console.error('Erreur Serveur Register:', error);
+    console.error('Détail de l’erreur:', error);
     return res.status(500).json({ 
-      error: 'Erreur lors de la génération des options',
-      details: error.message 
+      error: 'Erreur lors de la génération',
+      message: error.message 
     });
   }
 }
