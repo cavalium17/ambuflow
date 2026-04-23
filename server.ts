@@ -55,30 +55,39 @@ async function startServer() {
   // Legacy endpoint for raw testing in index.html
   app.get('/api/register', async (req, res) => {
     try {
-      const rpID = getRpID(req);
-      const user = {
-        id: 'user_123456',
-        email: 'contact@exemple.com',
-        name: 'Adrien'
-      };
+      // Logic aligned with the user's requested register.ts
+      const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3"; 
+      const userEmail = "contact@exemple.com";
+      const userName = "Adrien";
+      const RP_NAME = "AmbuFlow";
+      const RP_ID = "ambuflow-delta.vercel.app";
 
       const options = await generateRegistrationOptions({
-        rpName: "AmbuFlow",
-        rpID: rpID,
-        userID: Uint8Array.from(user.id, c => c.charCodeAt(0)),
-        userName: user.email,
-        userDisplayName: user.name,
+        rpName: RP_NAME,
+        rpID: RP_ID,
+        userID: Uint8Array.from(userId, c => c.charCodeAt(0)),
+        userName: userEmail,
+        userDisplayName: userName,
         attestationType: 'none',
         authenticatorSelection: {
-          residentKey: 'preferred',
+          residentKey: 'required',
           userVerification: 'preferred',
           authenticatorAttachment: 'platform', // Force FaceID/TouchID/Passkey
         },
       });
+
+      // Save challenge to Firestore (matching user request logic)
+      await db.collection('users').doc(userId).update({
+        currentChallenge: options.challenge
+      });
+
       res.status(200).json(options);
     } catch (error: any) {
       console.error('Erreur lors de la génération des options (Legacy):', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ 
+        error: 'Erreur lors de la génération des options',
+        details: error.message 
+      });
     }
   });
 
