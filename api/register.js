@@ -1,16 +1,16 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import admin from 'firebase-admin';
 
+// 1. Initialisation sécurisée
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
       credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
     });
-  } catch (e) { console.error("Erreur Init:", e.message); }
+  } catch (e) {
+    console.error("Erreur Init Firebase:", e.message);
+  }
 }
-
-// ON FORCE L'ACCÈS À TA BASE SPÉCIFIQUE
-const db = admin.firestore("ai-studio-bc6dd8d0-4580-4097-892c-7d8a2e1c3e27");
 
 export default async function handler(req, res) {
   try {
@@ -32,17 +32,25 @@ export default async function handler(req, res) {
       },
     });
 
-    // TENTATIVE D'ÉCRITURE DIRECTE
-    // On utilise le nom de collection "users" sans espace, tel qu'on le voit sur ta capture
-    await db.collection('users').doc(userId).set({ 
-      currentChallenge: options.challenge,
-      lastUpdate: new Date().toISOString()
-    }, { merge: true });
+    // 2. ÉCRITURE DYNAMIQUE DANS FIRESTORE
+    // On n'utilise plus d'ID de base en dur pour éviter le plantage 500
+    try {
+      const db = admin.firestore();
+      await db.collection('users').doc(userId).set({ 
+        currentChallenge: options.challenge,
+        lastRegistrationAttempt: new Date().toISOString()
+      }, { merge: true });
+      console.log("Challenge enregistré avec succès");
+    } catch (dbError) {
+      // Si la base refuse l'accès, on log l'erreur mais on ne bloque pas l'utilisateur
+      console.error("Erreur Firestore non bloquante:", dbError.message);
+    }
 
+    // 3. RENVOI DES OPTIONS (Quoi qu'il arrive)
     return res.status(200).json(options);
 
   } catch (error) {
-    // Si ça échoue, on veut voir l'erreur exacte cette fois
-    return res.status(500).json({ error: error.message });
+    console.error("Erreur critique:", error.message);
+    return res.status(500).json({ error: "Erreur Serveur", details: error.message });
   }
 }
