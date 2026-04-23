@@ -59,3 +59,4 @@ export default async function handler(req, res) {
     });
   }
 }
+// Version 2.0 - Firebase Connection
