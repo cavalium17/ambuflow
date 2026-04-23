@@ -56,15 +56,28 @@ async function startServer() {
   app.get('/api/register', async (req, res) => {
     try {
       const rpID = getRpID(req);
+      const user = {
+        id: 'user_123456',
+        email: 'contact@exemple.com',
+        name: 'Adrien'
+      };
+
       const options = await generateRegistrationOptions({
-        rpName: "AmbuFlow Test",
+        rpName: "AmbuFlow",
         rpID: rpID,
-        userID: Buffer.from("test-user-id"),
-        userName: "test@example.com",
-        attestationType: "none",
+        userID: Uint8Array.from(user.id, c => c.charCodeAt(0)),
+        userName: user.email,
+        userDisplayName: user.name,
+        attestationType: 'none',
+        authenticatorSelection: {
+          residentKey: 'preferred',
+          userVerification: 'preferred',
+          authenticatorAttachment: 'platform', // Force FaceID/TouchID/Passkey
+        },
       });
       res.status(200).json(options);
     } catch (error: any) {
+      console.error('Erreur lors de la génération des options (Legacy):', error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -90,12 +103,14 @@ async function startServer() {
       const options = await generateRegistrationOptions({
         rpName: "AmbuFlow",
         rpID: rpID,
-        userID: Buffer.from(userId),
+        userID: Uint8Array.from(userId as string, c => c.charCodeAt(0)),
         userName: email,
+        userDisplayName: email,
         attestationType: "none",
         authenticatorSelection: {
-          residentKey: "required",
+          residentKey: "preferred",
           userVerification: "preferred",
+          authenticatorAttachment: "platform", // Supporte FaceID/TouchID/Biométrie native
         },
       });
 
