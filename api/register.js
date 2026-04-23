@@ -1,7 +1,6 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import admin from 'firebase-admin';
 
-// 1. Initialisation de Firebase Admin
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
@@ -16,28 +15,18 @@ const db = admin.firestore();
 
 export default async function handler(req, res) {
   try {
-    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
-    // 2. Récupération dynamique du domaine
     const host = req.headers.host || '';
     const currentRP_ID = host.split(':')[0]; 
 
-    // 3. Données utilisateur (Formatage strict pour éviter l'erreur 'replace')
-    // On s'assure que ce sont des strings pures sans espaces bizarres
-    const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3".trim(); 
-    const userEmail = "contact@exemple.com".trim();
-    const userName = "Adrien".trim();
+    // VERIFIE BIEN CET ID : Il doit être identique à celui de ta photo Firebase
+    const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3"; 
 
-    // 4. Génération des options
     const options = await generateRegistrationOptions({
       rpName: 'AmbuFlow',
       rpID: currentRP_ID,
-      
-      // Conversion sécurisée en Uint8Array pour le standard WebAuthn
       userID: Uint8Array.from(userId, c => c.charCodeAt(0)),
-      
-      userName: userEmail,
-      userDisplayName: userName,
+      userName: "contact@exemple.com",
+      userDisplayName: "Adrien",
       attestationType: 'none',
       authenticatorSelection: {
         residentKey: 'required',
@@ -46,18 +35,16 @@ export default async function handler(req, res) {
       },
     });
 
-    // 5. Sauvegarde du challenge dans Firestore
-    await db.collection('users').doc(userId).update({
-      currentChallenge: options.challenge
-    });
+    // LE FIX EST ICI : .set + merge: true
+    await db.collection('users').doc(userId).set({
+      currentChallenge: options.challenge,
+      lastAction: 'registration_started'
+    }, { merge: true });
 
     return res.status(200).json(options);
 
   } catch (error) {
-    console.error('Détail de l’erreur:', error);
-    return res.status(500).json({ 
-      error: 'Erreur lors de la génération',
-      message: error.message 
-    });
+    console.error('Erreur:', error);
+    return res.status(500).json({ error: 'Erreur Serveur', message: error.message });
   }
 }
