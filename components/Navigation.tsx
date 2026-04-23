@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Clock, Calendar, Wallet, User, LogOut } from 'lucide-react';
+import { motion } from 'motion/react';
 import { auth } from '../src/firebaseConfig';
 import { signOut } from 'firebase/auth';
 import { AppTab } from '../types';
@@ -10,9 +11,10 @@ interface NavigationProps {
   setActiveTab: (tab: AppTab) => void;
   darkMode?: boolean;
   isGuest?: boolean;
+  setIsGuest?: (val: boolean) => void;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMode = false, isGuest = false }) => {
+const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMode = false, isGuest = false, setIsGuest }) => {
   const tabs = [
     { id: 'home', icon: Clock, label: 'Board' },
     { id: 'planning', icon: Calendar, label: 'Agenda' },
@@ -22,8 +24,12 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMo
 
   const handleLogout = async () => {
     try {
+      if (isGuest && setIsGuest) {
+        setIsGuest(false);
+        localStorage.removeItem('ambuflow_is_guest');
+        return;
+      }
       await signOut(auth);
-      // Local cleanups if needed
       localStorage.removeItem('ambuflow_is_guest');
     } catch (error) {
       console.error("Erreur lors de la déconnexion:", error);
@@ -31,57 +37,82 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, darkMo
   };
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-50 pointer-events-none">
-      <nav className={`h-16 pointer-events-auto transition-all duration-500 rounded-[24px] px-2 flex items-center justify-between border backdrop-blur-xl shadow-2xl ${
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-md z-50 pointer-events-none">
+      <nav className={`h-18 pointer-events-auto transition-all duration-500 rounded-[28px] px-2 flex items-center justify-between border backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] ${
         darkMode 
-          ? 'bg-white/5 border-white/10' 
-          : 'bg-slate-900/90 border-slate-700'
+          ? 'bg-slate-900/80 border-white/10' 
+          : 'bg-white/90 border-slate-200'
       }`}>
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const isDisabled = tab.disabled;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => !isDisabled && setActiveTab(tab.id as AppTab)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-300 outline-none ${
-                isDisabled
-                ? 'opacity-20 cursor-not-allowed text-slate-500'
-                : (isActive 
-                  ? 'text-white' 
-                  : 'text-slate-500 hover:text-slate-300')
-              }`}
-            >
-              <tab.icon 
-                size={20} 
-                strokeWidth={isActive ? 2.5 : 2} 
-              />
-              
-              <span className={`text-[9px] uppercase tracking-widest transition-all duration-300 ${
-                isActive ? 'font-black opacity-100' : 'font-bold opacity-60'
-              }`}>
-                {tab.label}
-              </span>
-            </button>
-          );
-        })}
+        <div className="flex-1 flex items-center justify-around">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const isDisabled = tab.disabled;
+            
+            return (
+              <button
+                key={tab.id}
+                onClick={() => !isDisabled && setActiveTab(tab.id as AppTab)}
+                className={`relative flex flex-col items-center justify-center py-2 px-3 transition-all duration-300 outline-none ${
+                  isDisabled
+                    ? 'opacity-20 cursor-not-allowed'
+                    : (isActive 
+                        ? (darkMode ? 'text-white' : 'text-indigo-600') 
+                        : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'))
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className={`absolute inset-0 rounded-2xl -z-10 ${
+                      darkMode ? 'bg-white/10 shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]' : 'bg-indigo-50 shadow-[inset_0_0_20px_rgba(79,70,229,0.05)]'
+                    }`}
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                
+                <tab.icon 
+                  size={22} 
+                  strokeWidth={isActive ? 2.5 : 2}
+                  className="transition-transform duration-300 active:scale-90"
+                />
+                
+                <span className={`text-[8px] mt-1 font-black uppercase tracking-[0.15em] transition-all duration-300 ${
+                  isActive ? 'opacity-100' : 'opacity-0 scale-75'
+                }`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-        {/* Bouton de Déconnexion */}
-        {!isGuest && (
-          <button
-            onClick={handleLogout}
-            className="flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-300 outline-none text-rose-500 hover:text-rose-400 group"
-          >
+        {/* Separator */}
+        <div className={`w-px h-8 mx-1 ${darkMode ? 'bg-white/10' : 'bg-slate-200'}`} />
+
+        {/* Logout Action */}
+        <button
+          onClick={handleLogout}
+          className={`flex flex-col items-center justify-center py-2 px-4 transition-all duration-300 outline-none group ${
+            isGuest 
+              ? 'text-indigo-400 hover:text-indigo-300' 
+              : 'text-rose-500 hover:text-rose-400'
+          }`}
+        >
+          <div className={`p-2 rounded-2xl transition-all duration-300 ${
+            isGuest 
+              ? 'bg-indigo-500/10 group-hover:bg-indigo-500/20' 
+              : 'bg-rose-500/10 group-hover:bg-rose-500/20'
+          }`}>
             <LogOut 
-              size={20} 
-              strokeWidth={2}
-              className="group-hover:-translate-x-0.5 transition-transform"
+              size={18} 
+              strokeWidth={2.5}
+              className="transition-transform duration-300 group-hover:-translate-x-0.5"
             />
-            <span className="text-[9px] uppercase tracking-widest font-bold opacity-60">
-              Quitter
-            </span>
-          </button>
-        )}
+          </div>
+          <span className="text-[7px] mt-1 font-black uppercase tracking-[0.1em] opacity-40">
+            {isGuest ? 'Login' : 'Quitter'}
+          </span>
+        </button>
       </nav>
     </div>
   );

@@ -2535,30 +2535,36 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       {(!isAuthReady || authLoading) ? (
-        <div className={`fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 ${effectiveDarkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}`}>
-          <div className="relative">
+        <div className={`fixed inset-0 z-[200] flex flex-col items-center justify-center p-8 ${effectiveDarkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}`}>
+          <div className="relative mb-12">
             <div className="w-16 h-16 border-4 border-indigo-500/20 rounded-full animate-spin border-t-indigo-500" />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
             </div>
           </div>
-          <div className="space-y-2 text-center animate-pulse">
-            <h2 className="text-xl font-black uppercase tracking-[0.3em] leading-none">AmbuFlow</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Initialisation sécurisée...</p>
+          <div className="space-y-4 text-center">
+            <div>
+              <h2 className="text-xl font-black uppercase tracking-[0.3em] leading-none">AmbuFlow</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 font-sans">
+                {user ? "Chargement du profil..." : "Initialisation..."}
+              </p>
+            </div>
           </div>
           {showLoadingLonger && (
             <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-8 px-6 text-center max-w-xs"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-12 p-6 bg-slate-900/50 border border-slate-800 rounded-[24px] text-center max-w-xs shadow-xl"
             >
-              <p className="text-[9px] text-slate-500 font-medium leading-relaxed uppercase tracking-widest">
-                La connexion avec Firebase prend plus de temps que prévu. 
-                Vérifiez votre connexion réseau ou rafraîchissez la page.
+              <p className="text-[10px] text-slate-400 font-bold leading-relaxed uppercase tracking-wider">
+                Connexion instable
+              </p>
+              <p className="text-[9px] text-slate-500 mt-2 leading-relaxed">
+                Le chargement des données Firebase prend du temps.
               </p>
               <button 
                 onClick={() => window.location.reload()}
-                className="mt-4 px-6 py-3 bg-white border border-slate-100 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all text-slate-900"
+                className="mt-6 w-full py-4 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
               >
                 Actualiser
               </button>
@@ -2788,7 +2794,13 @@ const App: React.FC = () => {
                 setSupplementaryTaskType={setSupplementaryTaskType}
               />}
             </main>
-            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} darkMode={effectiveDarkMode} isGuest={isGuest} />
+            <Navigation 
+              activeTab={activeTab} 
+              setActiveTab={setActiveTab} 
+              darkMode={effectiveDarkMode} 
+              isGuest={isGuest} 
+              setIsGuest={setIsGuest}
+            />
           </motion.div>
         </AnimatePresence>
       </div>

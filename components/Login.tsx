@@ -193,6 +193,18 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
         setIsLogin(true);
         setLoading(false);
         return;
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError(
+          <div className="space-y-1.5 flex flex-col">
+            <p className="font-black uppercase text-[10px]">Méthode désactivée</p>
+            <p className="opacity-70 text-[9px] leading-relaxed">
+              La connexion par email/mot de passe n'est pas activée dans la console Firebase.
+              Veuillez l'activer dans Authentication &gt; Sign-in method.
+            </p>
+          </div>
+        );
+        setLoading(false);
+        return;
       } else if (err.code === 'auth/weak-password') {
         message = "Le mot de passe doit contenir au moins 6 caractères.";
       } else if (err.code === 'auth/invalid-email') {
