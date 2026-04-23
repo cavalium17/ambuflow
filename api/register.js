@@ -1,4 +1,16 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
+import admin from 'firebase-admin';
+
+// 1. Initialisation sécurisée
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
+    });
+  } catch (e) { console.error("Erreur Init:", e.message); }
+}
+
+const db = admin.firestore();
 
 export default async function handler(req, res) {
   try {
@@ -6,7 +18,6 @@ export default async function handler(req, res) {
     const currentRP_ID = host.split(':')[0]; 
     const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3"; 
 
-    // GÉNÉRATION DES OPTIONS (SANS APPEL FIREBASE POUR TESTER)
     const options = await generateRegistrationOptions({
       rpName: 'AmbuFlow',
       rpID: currentRP_ID,
@@ -21,14 +32,19 @@ export default async function handler(req, res) {
       },
     });
 
-    // ON RENVOIE DIRECTEMENT LES OPTIONS
-    // Si cela affiche le JSON, alors le problème est 100% ta clé Firebase ou l'ID de ton projet.
+    // 2. Sauvegarde silencieuse (ne fait pas planter le JSON si ça échoue)
+    try {
+      // On teste les deux noms de collection vus sur tes captures
+      const userRef = db.collection('users').doc(userId);
+      await userRef.set({ currentChallenge: options.challenge }, { merge: true });
+    } catch (dbError) {
+      console.log("Note: Firebase n'a pas pu stocker le challenge, mais on continue.");
+    }
+
+    // 3. On renvoie le JSON (celui qui marche !)
     return res.status(200).json(options);
 
   } catch (error) {
-    return res.status(500).json({ 
-      error: 'Erreur de génération', 
-      details: error.message 
-    });
+    return res.status(500).json({ error: error.message });
   }
 }
