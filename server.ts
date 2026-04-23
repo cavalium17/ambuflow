@@ -55,16 +55,16 @@ async function startServer() {
   // Legacy endpoint for raw testing in index.html
   app.get('/api/register', async (req, res) => {
     try {
-      // Logic aligned with the user's requested register.ts
+      // Logic semi-aligned with the user's requested register.js (dynamic RP ID)
       const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3"; 
       const userEmail = "contact@exemple.com";
       const userName = "Adrien";
       const RP_NAME = "AmbuFlow";
-      const RP_ID = "ambuflow-delta.vercel.app";
+      const currentRP_ID = getRpID(req);
 
       const options = await generateRegistrationOptions({
         rpName: RP_NAME,
-        rpID: RP_ID,
+        rpID: currentRP_ID,
         userID: Uint8Array.from(userId, c => c.charCodeAt(0)),
         userName: userEmail,
         userDisplayName: userName,
@@ -78,7 +78,8 @@ async function startServer() {
 
       // Save challenge to Firestore (matching user request logic)
       await db.collection('users').doc(userId).update({
-        currentChallenge: options.challenge
+        currentChallenge: options.challenge,
+        updatedAt: FieldValue.serverTimestamp()
       });
 
       res.status(200).json(options);

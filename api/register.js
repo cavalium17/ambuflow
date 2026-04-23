@@ -1,62 +1,74 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
+import admin from 'firebase-admin';
 
-// Configuration de l'application
-const RP_ID = 'ambuflow-delta.vercel.app';
-const RP_NAME = 'AmbuFlow';
-const ORIGIN = `https://${RP_ID}`;
+// 1. Initialisation sécurisée de Firebase Admin
+if (!admin.apps.length) {
+  try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      admin.initializeApp({
+        credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
+      });
+    } else {
+      // Fallback pour l'environnement AI Studio Build qui utilise ADC
+      admin.initializeApp();
+    }
+  } catch (error) {
+    console.error('Erreur initialisation Firebase Admin:', error.message);
+  }
+}
+
+const db = admin.firestore();
 
 export default async function handler(req, res) {
   try {
-    // 1. Vérification de la méthode
+    // 2. Vérification de la méthode
     if (req.method !== 'GET') {
       return res.status(405).json({ error: 'Méthode non autorisée' });
     }
 
-    // 2. Récupération de l'utilisateur (Exemple via session ou body)
-    // REMPLACER PAR VOTRE LOGIQUE RÉELLE DE RÉCUPÉRATION D'UTILISATEUR
-    const user = {
-      id: 'user_123456', // Votre ID provenant de la DB (String)
-      email: 'contact@exemple.com',
-      name: 'Adrien'
-    };
+    // 3. Gestion dynamique du domaine (RP_ID)
+    // Cela permet au code de fonctionner sur l'URL principale ET les URLs de test
+    const host = req.headers.host;
+    const currentRP_ID = host ? host.split(':')[0] : 'localhost'; // Récupère le domaine sans le port
 
-    if (!user) {
-      return res.status(401).json({ error: 'Utilisateur non trouvé' });
-    }
+    // 4. Identification de l'utilisateur (ID provenant de votre Firebase)
+    const userId = "nTdQajBkoKXmWnhLEkJQYaTP9rB3"; 
+    const userEmail = "contact@exemple.com";
+    const userName = "Adrien";
 
-    // 3. Génération des options avec le correctif Uint8Array
+    // 5. Génération des options WebAuthn
     const options = await generateRegistrationOptions({
-      rpName: RP_NAME,
-      rpID: RP_ID,
+      rpName: 'AmbuFlow',
+      rpID: currentRP_ID, // Dynamique pour éviter l'erreur "not equal to current domain"
       
-      // --- CORRECTIF CRUCIAL ICI ---
-      // On transforme le string ID en Uint8Array pour respecter le nouveau standard
-      userID: Uint8Array.from(user.id, c => c.charCodeAt(0)),
+      // CORRECTIF : Conversion de l'ID en Uint8Array (pour éviter "Unexpected token A")
+      userID: Uint8Array.from(userId, c => c.charCodeAt(0)),
       
-      userName: user.email,
-      userDisplayName: user.name,
+      userName: userEmail,
+      userDisplayName: userName,
       attestationType: 'none',
       authenticatorSelection: {
-        residentKey: 'preferred',
+        residentKey: 'required',
         userVerification: 'preferred',
-        authenticatorAttachment: 'platform', // Force l'usage de FaceID/TouchID/Code téléphone
+        authenticatorAttachment: 'platform', // Force TouchID/FaceID/Code téléphone
       },
     });
 
-    // 4. Stockage du challenge (Indispensable pour la vérification ultérieure)
-    // Note: Vous devriez stocker options.challenge en DB ou en Cookie sécurisé ici
-    
-    // 5. Envoi des options au frontend
+    // 6. SAUVEGARDE DU CHALLENGE DANS FIREBASE
+    // Étape cruciale pour que l'étape de vérification puisse fonctionner plus tard
+    await db.collection('users').doc(userId).update({
+      currentChallenge: options.challenge,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // 7. Envoi des options au frontend
     return res.status(200).json(options);
 
   } catch (error) {
-    console.error('Erreur lors de la génération des options:', error);
-    
-    // On renvoie un JSON propre même en cas d'erreur pour éviter le crash Vercel
+    console.error('Erreur Serveur Register:', error);
     return res.status(500).json({ 
-      error: 'Erreur serveur interne',
+      error: 'Erreur lors de la génération des options',
       details: error.message 
     });
   }
 }
-// Version 2.0 - Firebase Connection
