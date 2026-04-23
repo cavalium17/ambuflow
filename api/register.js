@@ -1,7 +1,6 @@
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import admin from 'firebase-admin';
 
-// 1. Initialisation sécurisée
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
@@ -10,7 +9,8 @@ if (!admin.apps.length) {
   } catch (e) { console.error("Erreur Init:", e.message); }
 }
 
-const db = admin.firestore();
+// ON FORCE L'ACCÈS À TA BASE SPÉCIFIQUE
+const db = admin.firestore("ai-studio-bc6dd8d0-4580-4097-892c-7d8a2e1c3e27");
 
 export default async function handler(req, res) {
   try {
@@ -32,19 +32,17 @@ export default async function handler(req, res) {
       },
     });
 
-    // 2. Sauvegarde silencieuse (ne fait pas planter le JSON si ça échoue)
-    try {
-      // On teste les deux noms de collection vus sur tes captures
-      const userRef = db.collection('users').doc(userId);
-      await userRef.set({ currentChallenge: options.challenge }, { merge: true });
-    } catch (dbError) {
-      console.log("Note: Firebase n'a pas pu stocker le challenge, mais on continue.");
-    }
+    // TENTATIVE D'ÉCRITURE DIRECTE
+    // On utilise le nom de collection "users" sans espace, tel qu'on le voit sur ta capture
+    await db.collection('users').doc(userId).set({ 
+      currentChallenge: options.challenge,
+      lastUpdate: new Date().toISOString()
+    }, { merge: true });
 
-    // 3. On renvoie le JSON (celui qui marche !)
     return res.status(200).json(options);
 
   } catch (error) {
+    // Si ça échoue, on veut voir l'erreur exacte cette fois
     return res.status(500).json({ error: error.message });
   }
 }
