@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { startRegistration } from '@simplewebauthn/browser';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth } from '../src/firebaseConfig';
 import { 
@@ -19,8 +18,6 @@ import {
   Calendar,
   Briefcase,
   User,
-  Fingerprint,
-  ShieldCheck,
   Smartphone,
   Loader2
 } from 'lucide-react';
@@ -47,85 +44,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userEmail }) => {
   const [contractStartDate, setContractStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [supplementaryTaskType, setSupplementaryTaskType] = useState<'none' | 'type_1' | 'type_2' | 'type_3'>('none');
   const [initialCpBalance, setInitialCpBalance] = useState(25);
+  const [hourlyRate, setHourlyRate] = useState(12.50);
   const [autoGeo, setAutoGeo] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(true);
-  const [isPasskeyEnabled, setIsPasskeyEnabled] = useState(false);
-  const [isPasskeySupported, setIsPasskeySupported] = useState(false);
-  const [passkeyLoading, setPasskeyLoading] = useState(false);
-  const [passkeyError, setPasskeyError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Check if WebAuthn is supported
-    if (window.PublicKeyCredential) {
-      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
-        .then(supported => setIsPasskeySupported(supported));
-    }
-  }, []);
 
   useEffect(() => {
     if (roles.length >= 2 && roles.includes('taxi')) {
       setSupplementaryTaskType('type_2');
     }
   }, [roles]);
-
-  const registerPasskey = async () => {
-    if (!window.PublicKeyCredential || !auth.currentUser) return;
-    
-    setPasskeyLoading(true);
-    setPasskeyError(null);
-
-    try {
-      const user = auth.currentUser;
-      
-      // 1. Get registration options
-      const resp = await fetch('/api/register-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, email: user.email })
-      });
-      
-      if (!resp.ok) {
-        const errData = await resp.json();
-        throw new Error(errData.error || 'Erreur lors de la récupération des options');
-      }
-      
-      const options = await resp.json();
-
-      // 2. Launch startRegistration
-      const registrationResponse = await startRegistration(options);
-      
-      // 3. Verify registration on server
-      const verifyResp = await fetch('/api/verify-registration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, registrationResponse })
-      });
-
-      const verification = await verifyResp.json();
-
-      if (verification.verified) {
-        setIsPasskeyEnabled(true);
-        console.log("Passkey registered and verified!");
-      } else {
-        throw new Error(verification.error || "La vérification du Passkey a échoué");
-      }
-    } catch (err: any) {
-      console.error("Onboarding Passkey error:", err);
-      if (err.name !== 'NotAllowedError') {
-        setPasskeyError("Erreur : " + (err.message || "Échec de l'enregistrement biométrique."));
-      }
-    } finally {
-      setPasskeyLoading(false);
-    }
-  };
-
-  const handlePasskeyToggle = () => {
-    if (!isPasskeyEnabled) {
-      registerPasskey();
-    } else {
-      setIsPasskeyEnabled(false);
-    }
-  };
 
   const steps = [
     'Value Prop',
@@ -134,7 +61,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userEmail }) => {
     'Priorité',
     'Contrat',
     'Permissions',
-    'Passkey',
     'Activation'
   ];
 
@@ -173,9 +99,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userEmail }) => {
       contractStartDate,
       supplementaryTaskType,
       initialCpBalance,
+      hourlyRate,
       autoGeo,
-      pushEnabled,
-      isPasskeyEnabled
+      pushEnabled
     });
   };
 
@@ -485,6 +411,27 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userEmail }) => {
                   </div>
                 </div>
 
+                {/* Taux Horaire */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-end ml-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Taux horaire brut (€/h)</label>
+                    <span className="text-indigo-600 font-black text-2xl">{hourlyRate.toFixed(2)}€</span>
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                      <span className="text-slate-400 font-bold text-lg">€</span>
+                    </div>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      value={hourlyRate}
+                      onChange={(e) => setHourlyRate(Number(e.target.value))}
+                      placeholder="Ex: 12.50"
+                      className="w-full bg-white border border-slate-100 text-[#0F172A] p-5 pl-12 rounded-2xl focus:border-indigo-500 shadow-sm outline-none transition-all font-bold text-lg"
+                    />
+                  </div>
+                </div>
+
                 {/* Mode de Calcul */}
                 <div className="space-y-4">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Régime de calcul</label>
@@ -783,134 +730,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userEmail }) => {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="flex-1 min-h-0 flex flex-col"
-            >
-              <div className="mt-8 mb-8">
-                <motion.p 
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3"
-                >
-                  Étape {getDisplayStep(6)}
-                </motion.p>
-                <motion.h2 
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-4xl font-black text-[#0F172A] tracking-tight mb-2"
-                >
-                  Passkey & Biométrie
-                </motion.h2>
-                <motion.p 
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="text-slate-500 font-medium"
-                >
-                  Sécurisez votre compte avec votre empreinte ou FaceID.
-                </motion.p>
-              </div>
-
-              <div className="flex-1 flex flex-col items-center justify-center space-y-10 py-10">
-                <div className="relative">
-                   <motion.div 
-                     animate={{ rotate: isPasskeyEnabled ? 0 : -6 }}
-                     className={`w-32 h-32 rounded-[40px] flex items-center justify-center transition-all duration-700 ${isPasskeyEnabled ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-600/40' : 'bg-slate-50 text-slate-300'}`}
-                   >
-                      <Fingerprint size={64} className={isPasskeyEnabled ? 'animate-pulse' : ''} />
-                   </motion.div>
-                   {isPasskeyEnabled && (
-                     <motion.div 
-                        initial={{ scale: 0 }} 
-                        animate={{ scale: 1 }} 
-                        className="absolute -top-3 -right-3 w-10 h-10 bg-emerald-500 rounded-full border-4 border-white flex items-center justify-center shadow-lg"
-                     >
-                        <Check className="text-white" size={20} />
-                     </motion.div>
-                   )}
-                   <div className="absolute -inset-4 bg-indigo-100/30 blur-3xl rounded-full -z-10" />
-                </div>
-
-                <div className="text-center space-y-4 max-w-xs">
-                  <p className="text-slate-500 font-medium leading-relaxed">
-                    {isPasskeyEnabled 
-                      ? "Votre passkey est configuré ! Vous pourrez l'utiliser pour vous connecter instantanément."
-                      : "Connexion instantanée et sécurisée grâce au module biométrique de votre smartphone."
-                    }
-                  </p>
-                </div>
-
-                <button 
-                  onClick={handlePasskeyToggle}
-                  disabled={passkeyLoading}
-                  className={`w-full max-w-sm py-6 rounded-[28px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-3 active:scale-95 ${
-                    isPasskeyEnabled 
-                      ? 'bg-emerald-50 text-emerald-600 border-[1.5px] border-emerald-200 shadow-lg shadow-emerald-500/10' 
-                      : 'bg-[#0F172A] text-white shadow-xl shadow-slate-900/30'
-                  }`}
-                >
-                  {passkeyLoading ? (
-                    <Loader2 className="animate-spin" size={20} />
-                  ) : isPasskeyEnabled ? (
-                    <>
-                      <ShieldCheck size={20} />
-                      Passkey Activé
-                    </>
-                  ) : (
-                    <>
-                      <Fingerprint size={20} />
-                      Activer avec Biométrie
-                    </>
-                  )}
-                </button>
-
-                {passkeyError && (
-                  <motion.p 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-[10px] text-rose-500 font-bold uppercase tracking-wider text-center mt-2 max-w-xs"
-                  >
-                    {passkeyError}
-                  </motion.p>
-                )}
-              </div>
-
-              <div className="mt-auto pt-6 flex gap-4 flex-shrink-0">
-                <button onClick={prevStep} className="p-5 bg-white text-slate-300 border border-slate-100 rounded-2xl shadow-sm transition-all active:scale-95 hover:text-indigo-600 hover:border-indigo-100">
-                  <ChevronLeft />
-                </button>
-                <button 
-                  onClick={nextStep} 
-                  className="flex-1 py-5 bg-[#0F172A] text-white font-black rounded-2xl uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-slate-900/20 active:scale-[0.98] transition-all"
-                >
-                  Continuer
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {step === 7 && (
-            <motion.div 
-              key="step7"
-              variants={containerVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
               className="flex-1 min-h-0 flex flex-col justify-center items-center text-center space-y-12"
             >
               <div className="relative">
                 <motion.div 
-                  initial={{ scale: 0, rotate: -20 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  className="w-36 h-36 bg-white rounded-[40px] shadow-[30px_30px_60px_#e4e4e4,-30px_-30px_60px_#ffffff] flex items-center justify-center relative z-10"
+                   initial={{ scale: 0, rotate: -20 }}
+                   animate={{ scale: 1, rotate: 0 }}
+                   className="w-36 h-36 bg-white rounded-[40px] shadow-[30px_30px_60px_#e4e4e4,-30px_-30px_60px_#ffffff] flex items-center justify-center relative z-10"
                 >
-                  <Play className="text-indigo-600 fill-indigo-600 ml-2" size={64} />
+                   <Play className="text-indigo-600 fill-indigo-600 ml-2" size={64} />
                 </motion.div>
                 <motion.div 
-                  animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                  className="absolute -inset-10 bg-indigo-100/30 blur-[40px] rounded-full -z-10" 
+                   animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                   transition={{ duration: 3, repeat: Infinity }}
+                   className="absolute -inset-10 bg-indigo-100/30 blur-[40px] rounded-full -z-10" 
                 />
               </div>
               <div className="space-y-6">

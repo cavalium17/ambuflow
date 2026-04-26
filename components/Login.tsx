@@ -1,6 +1,5 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { startAuthentication } from '@simplewebauthn/browser';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Mail, 
@@ -11,7 +10,6 @@ import {
   ShieldCheck,
   Chrome,
   UserCircle,
-  Fingerprint,
   Eye,
   EyeOff,
   Plus,
@@ -48,57 +46,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
   const [resetSent, setResetSent] = useState(false);
   const [showUserNotFoundModal, setShowUserNotFoundModal] = useState(false);
   
-  const handlePasskeyAuth = async () => {
-    if (!window.PublicKeyCredential) {
-      setError("Les Passkeys ne sont pas supportés sur ce navigateur.");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // 1. Get authentication options
-      const resp = await fetch('/api/login-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email || undefined }) // Optional email hint
-      });
-      
-      if (!resp.ok) throw new Error('Impossible de récupérer les options de connexion');
-      
-      const options = await resp.json();
-
-      // 2. Launch startAuthentication
-      const authResponse = await startAuthentication(options);
-
-      // 3. Verify authentication on server
-      const verifyResp = await fetch('/api/verify-authentication', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authenticationResponse: authResponse })
-      });
-
-      const verification = await verifyResp.json();
-
-      if (verification.verified && verification.customToken) {
-        // 4. Sign in to Firebase with the custom token
-        await signInWithCustomToken(auth, verification.customToken);
-        console.log("Passkey login successful!");
-        if (onLoginSuccess) onLoginSuccess();
-      } else {
-        throw new Error(verification.error || "La vérification du Passkey a échoué");
-      }
-    } catch (err: any) {
-      console.error("Passkey error:", err);
-      if (err.name !== 'NotAllowedError') {
-        setError("Échec de l'authentification Passkey. Vérifiez que vous avez configuré un Passkey.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleAppleLogin = () => {
     setError("La connexion avec Apple sera disponible prochainement.");
   };
@@ -145,7 +92,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
             <div className="space-y-1.5 flex flex-col">
               <p className="font-black uppercase text-[10px]">Identifiants incorrects</p>
               <p className="opacity-70">L'email ou le mot de passe ne correspond à aucun compte.</p>
-              <div className="flex gap-4 mt-2">
+              {email.toLowerCase().endsWith('@gmail.com') && (
+                <p className="text-indigo-500 font-bold mt-1">Vous avez peut-être créé votre compte avec Google ? Essayez le bouton Google ci-dessus.</p>
+              )}
+              <div className="flex flex-wrap gap-4 mt-2">
                 <button 
                   type="button"
                   onClick={() => {
@@ -162,7 +112,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
                   onClick={handleResetPassword}
                   className="text-[8px] underline decoration-indigo-300 underline-offset-4 hover:text-indigo-600 transition-colors uppercase font-black"
                 >
-                  Mot de passe oublié ?
+                  Réinitialiser le mot de passe
                 </button>
               </div>
             </div>
@@ -175,19 +125,31 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
       } else if (err.code === 'auth/email-already-in-use') {
         setError(
           <div className="space-y-1.5 flex flex-col">
-            <p>Cet email est déjà enregistré.</p>
-            <button 
-              type="button"
-              onClick={() => {
-                setIsLogin(true);
-                setError(null);
-                // Clear password to let user enter their actual password for login
-                setPassword('');
-              }}
-              className="w-fit text-[8px] underline decoration-indigo-300 underline-offset-4 hover:text-indigo-600 transition-colors uppercase font-black"
-            >
-              Se connecter au compte existant
-            </button>
+            <p className="font-black uppercase text-[10px]">Compte existant</p>
+            <p className="opacity-70">Cet email est déjà enregistré sur AmbuFlow.</p>
+            {email.toLowerCase().endsWith('@gmail.com') && (
+              <p className="text-indigo-500 font-bold">Essayez de vous connecter avec Google.</p>
+            )}
+            <div className="flex gap-4 mt-2">
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsLogin(true);
+                  setError(null);
+                  setPassword('');
+                }}
+                className="text-[8px] underline decoration-indigo-300 underline-offset-4 hover:text-indigo-600 transition-colors uppercase font-black"
+              >
+                Passer à la connexion
+              </button>
+              <button 
+                type="button"
+                onClick={handleResetPassword}
+                className="text-[8px] underline decoration-indigo-300 underline-offset-4 hover:text-indigo-600 transition-colors uppercase font-black"
+              >
+                Mot de passe oublié ?
+              </button>
+            </div>
           </div>
         );
         setIsLogin(true);
@@ -376,39 +338,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onEnterAsGuest }) => {
             <p className="text-slate-300 text-[10px] font-medium uppercase tracking-[0.3em] font-sans">
               Gestion de vos heures avec précision
             </p>
-          </motion.div>
-
-          {/* Smart Passkey Section */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="space-y-4"
-          >
-            <button 
-              onClick={handlePasskeyAuth}
-              disabled={loading}
-              className="w-full group relative flex items-center justify-between p-5 bg-white rounded-[20px] neumorphic-shadow hover:neumorphic-shadow-hover transition-all active:scale-[0.99] disabled:opacity-50 border border-white/40"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-purple-50 rounded-[18px] flex items-center justify-center text-purple-500 group-hover:bg-purple-500 group-hover:text-white transition-all duration-300">
-                  <Fingerprint size={32} />
-                </div>
-                <div className="text-left">
-                  <p className="text-[#0F172A] font-black text-sm uppercase tracking-wider">Accès Rapide</p>
-                  <p className="text-slate-400 text-[10px] font-medium uppercase tracking-widest">Utiliser votre Passkey</p>
-                </div>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:text-purple-500 transition-colors">
-                <ChevronRight size={20} />
-              </div>
-            </button>
-            <div className="flex items-center justify-center gap-2 px-6">
-              <Info size={11} className="text-indigo-400" />
-              <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider text-center">
-                Connectez-vous manuellement pour activer le Passkey
-              </p>
-            </div>
           </motion.div>
 
           {/* Social Auth - Sleek Rounded */}

@@ -1,6 +1,5 @@
 
 import React, { useRef, useState, useMemo } from 'react';
-import { startRegistration } from '@simplewebauthn/browser';
 import { 
   User, 
   ShieldCheck, 
@@ -33,7 +32,6 @@ import {
   Camera,
   Loader2,
   Calendar as CalendarIcon,
-  Fingerprint,
   Smartphone
 } from 'lucide-react';
 import { Shift, ActivityLog, UserStats, UserRole } from '../types';
@@ -91,8 +89,6 @@ interface ProfileTabProps {
   setPayRateMode: (val: '100_percent' | '90_percent') => void;
   pushEnabled: boolean;
   setPushEnabled: (val: boolean) => void;
-  isPasskeyEnabled: boolean;
-  setIsPasskeyEnabled: (val: boolean) => void;
   autoGeo: boolean;
   setAutoGeo: (val: boolean) => void;
   roles: UserRole[];
@@ -156,8 +152,6 @@ export default function ProfileTab({
   setPayRateMode,
   pushEnabled,
   setPushEnabled,
-  isPasskeyEnabled,
-  setIsPasskeyEnabled,
   autoGeo,
   setAutoGeo,
   roles = [],
@@ -171,62 +165,8 @@ export default function ProfileTab({
   supplementaryTaskType = 'none',
   setSupplementaryTaskType
 }: ProfileTabProps) {
-  // --- LA FONCTION DOIT ÊTRE ICI (DANS LE COMPOSANT) ---
-  const handleCreatePasskey = async () => {
-    if (!window.PublicKeyCredential || !auth.currentUser) return;
-    
-    setPasskeyLoading(true);
-    try {
-      const user = auth.currentUser;
-      
-      // 1. Get registration options
-      const resp = await fetch('/api/register-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, email: user.email })
-      });
-      
-      if (!resp.ok) {
-        const errData = await resp.json();
-        throw new Error(errData.error || 'Erreur lors de la récupération des options');
-      }
-      
-      const options = await resp.json();
-
-      // 2. Launch startRegistration
-      const registrationResponse = await startRegistration(options);
-      
-      // 3. Verify registration on server
-      const verifyResp = await fetch('/api/verify-registration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, registrationResponse })
-      });
-
-      const verification = await verifyResp.json();
-
-      if (verification.verified) {
-        setIsPasskeyEnabled(true);
-        console.log("Passkey registered and verified via Profile!");
-        alert("Passkey enregistrée et vérifiée sur cet appareil !");
-      } else {
-        throw new Error(verification.error || "La vérification du Passkey a échoué");
-      }
-    } catch (error: any) {
-      console.error("Erreur Passkey:", error);
-      if (error.name === 'NotAllowedError') {
-        // L'utilisateur a simplement fermé la fenêtre
-      } else {
-        alert("L'enregistrement a échoué : " + error.message);
-      }
-    } finally {
-      setPasskeyLoading(false);
-    }
-  };
-
   const [isResetting, setIsResetting] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [showModulationDateModal, setShowModulationDateModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -242,7 +182,8 @@ export default function ProfileTab({
     setIsUploading(true);
     try {
       // Create a unique filename based on user name and timestamp
-      const filename = `profile_images/${userName.replace(/\s+/g, '_')}_${Date.now()}`;
+      const safeUserName = (userName || 'user').replace(/\s+/g, '_');
+      const filename = `profile_images/${safeUserName}_${Date.now()}`;
       const storageRef = ref(storage, filename);
       
       await uploadBytes(storageRef, file);
@@ -275,14 +216,6 @@ export default function ProfileTab({
 
   const seniorityText = seniorityInfo?.text || "N/A";
   const seniorityBonus = seniorityInfo?.bonus ? `+${(seniorityInfo.bonus * 100).toFixed(0)}%` : "+0%";
-
-  const handlePasskeyToggle = () => {
-    if (!isPasskeyEnabled) {
-      handleCreatePasskey();
-    } else {
-      setIsPasskeyEnabled(false);
-    }
-  };
 
   const complianceItems = React.useMemo(() => {
     const now = new Date();
@@ -811,44 +744,6 @@ export default function ProfileTab({
               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${autoGeo ? 'left-7' : 'left-1'}`} />
             </button>
           </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
-                <Fingerprint size={18} />
-              </div>
-              <span className="text-sm font-bold">Passkey / Biométrie</span>
-            </div>
-            <button 
-              onClick={handlePasskeyToggle}
-              disabled={passkeyLoading}
-              className={`w-12 h-6 rounded-full relative transition-all ${isPasskeyEnabled ? 'bg-indigo-600' : 'bg-slate-700'} ${passkeyLoading ? 'opacity-50' : ''}`}
-            >
-              {passkeyLoading ? (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Loader2 size={10} className="text-white animate-spin" />
-                </div>
-              ) : (
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isPasskeyEnabled ? 'left-7' : 'left-1'}`} />
-              )}
-            </button>
-          </div>
-
-          <button
-            onClick={handleCreatePasskey}
-            className="w-full flex items-center justify-between p-4 bg-indigo-600/10 border border-indigo-600/20 rounded-2xl hover:bg-indigo-600/20 transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-600 rounded-lg text-white">
-                <Fingerprint size={20} />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold text-white">Passkey Biométrique</p>
-                <p className="text-[10px] text-white/50">Activer FaceID ou Empreinte</p>
-              </div>
-            </div>
-            <ChevronRight size={18} className="text-white/20 group-hover:translate-x-1 transition-transform" />
-          </button>
 
           <div className="pt-6 border-t border-white/5">
             <div className="mb-4">

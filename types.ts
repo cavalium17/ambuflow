@@ -64,7 +64,7 @@ export interface UserProfile {
   supplementaryTaskType?: 'none' | 'type_1' | 'type_2' | 'type_3';
   initialCpBalance?: number;
   lastCpAccrualDate?: string; // Format: "YYYY-MM"
-  isPasskeyEnabled?: boolean;
+  hourlyRate?: number;
 }
 
 export interface Badge {
